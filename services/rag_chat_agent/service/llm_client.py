@@ -49,7 +49,10 @@ class LLMClient:
         if settings.anthropic_api_key:
             import anthropic
 
-            self._anthropic = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+            self._anthropic = anthropic.AsyncAnthropic(
+                api_key=settings.anthropic_api_key,
+                base_url=settings.anthropic_base_url,
+            )
 
         if settings.kimi_api_key:
             import openai

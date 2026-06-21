@@ -46,6 +46,7 @@ class Settings(BaseSettings):
     # LLM (RAG only)
     openai_api_key: str | None = Field(default=None, alias="OPENAI_API_KEY")
     anthropic_api_key: str | None = Field(default=None, alias="ANTHROPIC_API_KEY")
+    anthropic_base_url: str = Field(default="https://api.anthropic.com", alias="ANTHROPIC_BASE_URL")
     kimi_api_key: str | None = Field(default=None, alias="KIMI_API_KEY")
     kimi_base_url: str = Field(default="https://api.kimi.com/coding/v1", alias="KIMI_BASE_URL")
     default_llm_model: str = Field(default="gpt-4o", alias="DEFAULT_LLM_MODEL")
