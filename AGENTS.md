@@ -36,7 +36,7 @@ uv run pytest
 # Start local infrastructure
 docker compose up -d
 
-# Start services locally
+# Start services locally (set OPENAI_API_KEY, ANTHROPIC_API_KEY, or KIMI_API_KEY)
 uv run uvicorn services.rag_chat_agent.api.main:app --reload --port 8000
 uv run uvicorn services.autocomplete.api.main:app --reload --port 8001
 ```

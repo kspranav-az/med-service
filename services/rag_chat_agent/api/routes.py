@@ -23,10 +23,10 @@ async def health() -> dict[str, str]:
 @router.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest) -> ChatResponse:
     """Answer a medical question using retrieval-augmented generation."""
-    if not settings.openai_api_key and not settings.anthropic_api_key:
+    if not settings.openai_api_key and not settings.anthropic_api_key and not settings.kimi_api_key:
         raise HTTPException(
             status_code=503,
-            detail="No LLM API key configured. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.",
+            detail="No LLM API key configured. Set OPENAI_API_KEY, ANTHROPIC_API_KEY, or KIMI_API_KEY.",
         )
 
     trace_id = observability.trace_id()

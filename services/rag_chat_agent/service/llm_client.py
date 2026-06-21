@@ -1,4 +1,4 @@
-"""Simple LLM client supporting OpenAI and Anthropic."""
+"""Simple LLM client supporting OpenAI, Anthropic, and Kimi (Moonshot)."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from shared.logging import get_logger
 
 logger = get_logger(__name__)
 
-Provider = Literal["openai", "anthropic"]
+Provider = Literal["openai", "anthropic", "kimi"]
 
 
 @dataclass
@@ -27,16 +27,19 @@ def _detect_provider(model: str) -> Provider:
     """Map a model string to a provider."""
     if model.startswith("claude"):
         return "anthropic"
+    if model.startswith("kimi"):
+        return "kimi"
     return "openai"
 
 
 class LLMClient:
-    """Thin wrapper around OpenAI and Anthropic chat completion APIs."""
+    """Thin wrapper around OpenAI, Anthropic, and Kimi chat completion APIs."""
 
     def __init__(self) -> None:
         """Initialise available clients based on configured API keys."""
         self._openai: Any | None = None
         self._anthropic: Any | None = None
+        self._kimi: Any | None = None
 
         if settings.openai_api_key:
             import openai
@@ -47,6 +50,14 @@ class LLMClient:
             import anthropic
 
             self._anthropic = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+
+        if settings.kimi_api_key:
+            import openai
+
+            self._kimi = openai.AsyncOpenAI(
+                api_key=settings.kimi_api_key,
+                base_url=settings.kimi_base_url,
+            )
 
     async def complete(
         self,
@@ -74,6 +85,11 @@ class LLMClient:
                 raise RuntimeError("Anthropic API key not configured")
             return await self._anthropic_complete(messages, model, temperature, max_tokens)
 
+        if provider == "kimi":
+            if self._kimi is None:
+                raise RuntimeError("Kimi API key not configured")
+            return await self._kimi_complete(messages, model, temperature, max_tokens)
+
         if self._openai is None:
             raise RuntimeError("OpenAI API key not configured")
         return await self._openai_complete(messages, model, temperature, max_tokens)
@@ -96,6 +112,35 @@ class LLMClient:
             )
         except openai.OpenAIError as exc:
             logger.error("openai_completion_failed", extra={"error": str(exc)})
+            raise
+
+        choice = response.choices[0]
+        return LLMResponse(
+            text=choice.message.content or "",
+            model=model,
+            input_tokens=response.usage.prompt_tokens if response.usage else 0,
+            output_tokens=response.usage.completion_tokens if response.usage else 0,
+        )
+
+    async def _kimi_complete(
+        self,
+        messages: list[dict[str, str]],
+        model: str,
+        temperature: float,
+        max_tokens: int,
+    ) -> LLMResponse:
+        """Call Kimi's OpenAI-compatible API."""
+        import openai
+
+        try:
+            response = await self._kimi.chat.completions.create(  # type: ignore[union-attr]
+                model=model,
+                messages=messages,  # type: ignore[arg-type]
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+        except openai.OpenAIError as exc:
+            logger.error("kimi_completion_failed", extra={"error": str(exc)})
             raise
 
         choice = response.choices[0]

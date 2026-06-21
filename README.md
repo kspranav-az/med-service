@@ -62,7 +62,7 @@ uv run reindex-all --parser pymupdf --batch-size 32
 ### 5. Run services locally
 
 ```bash
-# RAG Chat Agent (requires OPENAI_API_KEY or ANTHROPIC_API_KEY)
+# RAG Chat Agent (requires OPENAI_API_KEY, ANTHROPIC_API_KEY, or KIMI_API_KEY)
 uv run uvicorn services.rag_chat_agent.api.main:app --reload --port 8000
 
 # Semantic Autocomplete
@@ -74,9 +74,15 @@ Example requests:
 ```bash
 curl http://localhost:8000/api/v1/health
 
+# With OpenAI
 OPENAI_API_KEY=sk-... curl -X POST http://localhost:8000/api/v1/chat \
   -H 'Content-Type: application/json' \
   -d '{"query":"What are the first-line treatments for Type 2 Diabetes?"}'
+
+# With Kimi (Moonshot)
+KIMI_API_KEY=sk-... curl -X POST http://localhost:8000/api/v1/chat \
+  -H 'Content-Type: application/json' \
+  -d '{"query":"What are the first-line treatments for Type 2 Diabetes?","model":"kimi-k2"}'
 
 curl http://localhost:8001/api/v1/health
 
