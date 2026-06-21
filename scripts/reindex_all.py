@@ -1,7 +1,10 @@
 """Reindex all corpus sources into Qdrant with resume support.
 
+Keeps the embedding model and Qdrant connection loaded across sources
+for better performance.
+
 Example:
-    uv run python scripts/reindex_all.py --parser pymupdf --batch-size 32
+    uv run reindex-all --parser pymupdf --batch-size 32
 """
 
 from __future__ import annotations
@@ -10,9 +13,12 @@ import argparse
 import json
 from pathlib import Path
 
+from scripts.indexing import index_source
 from shared.corpus_client import load_manifest
+from shared.embeddings.embedder import DEFAULT_MODEL, Embedder
 from shared.logging import configure_logging, get_logger
 from shared.models import Source
+from shared.vector_store.qdrant_store import QdrantVectorStore
 
 logger = get_logger(__name__)
 
@@ -41,7 +47,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--embedding-model",
         type=str,
-        default="BAAI/bge-base-en-v1.5",
+        default=DEFAULT_MODEL,
         help="Sentence-transformers model name.",
     )
     parser.add_argument(
@@ -63,37 +69,26 @@ def save_progress(progress: dict[str, list[str]]) -> None:
     PROGRESS_FILE.write_text(json.dumps(progress, indent=2), encoding="utf-8")
 
 
-def reindex_source_cli(source: Source, args: argparse.Namespace) -> bool:
-    """Call reindex_source.py for a single source. Returns True on success."""
-    import subprocess
-    import sys
-
-    cmd = [
-        sys.executable,
-        "scripts/reindex_source.py",
-        "--source",
-        source.source_id,
-        "--parser",
-        args.parser,
-        "--batch-size",
-        str(args.batch_size),
-        "--embedding-model",
-        args.embedding_model,
-    ]
-    if args.disable_image_extraction:
-        cmd.append("--disable-image-extraction")
-
-    logger.info(
-        "starting_source_reindex",
-        extra={"source_id": source.source_id, "command": " ".join(cmd)},
-    )
-
+def reindex_source_with_logging(
+    source: Source,
+    args: argparse.Namespace,
+    embedder: Embedder,
+    store: QdrantVectorStore,
+) -> bool:
+    """Index a single source and return True on success."""
     try:
-        result = subprocess.run(cmd, check=False, capture_output=False, text=True)
-        return result.returncode == 0
+        index_source(
+            source=source,
+            parser_type=args.parser,
+            embedder=embedder,
+            store=store,
+            batch_size=args.batch_size,
+            disable_image_extraction=args.disable_image_extraction,
+        )
+        return True
     except Exception as exc:  # pragma: no cover
         logger.error(
-            "reindex_subprocess_failed",
+            "reindex_source_failed",
             extra={"source_id": source.source_id, "error": str(exc)},
         )
         return False
@@ -110,6 +105,19 @@ def main() -> None:
     progress = load_progress()
     sources = load_manifest()
 
+    logger.info(
+        "reindex_all_starting",
+        extra={
+            "parser": args.parser,
+            "total_sources": len(sources),
+            "already_completed": len(progress["completed"]),
+        },
+    )
+
+    # Load heavy resources once and reuse across sources.
+    embedder = Embedder(model_name=args.embedding_model)
+    store = QdrantVectorStore()
+
     for source in sources:
         if source.source_id in progress["completed"]:
             logger.info(
@@ -118,7 +126,7 @@ def main() -> None:
             )
             continue
 
-        success = reindex_source_cli(source, args)
+        success = reindex_source_with_logging(source, args, embedder, store)
         if success:
             progress["completed"].append(source.source_id)
             if source.source_id in progress["failed"]:

@@ -41,7 +41,15 @@ class TestRagService:
         assert response.status_code == 200
         assert response.json()["status"] == "ok"
 
-    def test_chat_requires_llm_key(self, client: TestClient) -> None:
+    def test_chat_requires_llm_key(
+        self,
+        client: TestClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(settings, "openai_api_key", None)
+        monkeypatch.setattr(settings, "anthropic_api_key", None)
+        monkeypatch.setattr(settings, "kimi_api_key", None)
+
         response = client.post("/api/v1/chat", json={"query": "test"})
         assert response.status_code == 503
         assert "KIMI_API_KEY" in response.json()["detail"]
