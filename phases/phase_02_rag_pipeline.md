@@ -15,11 +15,15 @@ Weeks 2–4
 ## Tasks
 
 ### 1. PDF Ingestion (`shared/ingestion/`)
-- Build PDF text extractor using `pypdf` or `pymupdf`
+- Build a pluggable PDF parser abstraction (`PDFParser` Protocol/ABC)
+- Implement two parsers:
+  - **PyMuPDF / pypdf parser** — fast, reliable, default
+  - **Marker parser** (`marker-pdf`) — layout-preserving, slower, optional
 - Extract text + page number per page
 - Handle split books (e.g., `campbell_walsh_urology_11e_part_*.pdf`) as a single logical source
 - Preserve source metadata: `source_id`, `filename`, `title`, `page_number`
 - Add script `scripts/ingest_pdfs.py` to parse a single source or all sources
+- Add script/flag to compare PyMuPDF vs Marker output on one book
 
 ### 2. Chunking (`shared/chunking/`)
 - Implement dynamic token-based chunking
@@ -81,6 +85,7 @@ Weeks 2–4
 ## Key Considerations
 
 - **Start with one small PDF** for end-to-end testing, then scale to all 24.
+- **Parser choice:** PyMuPDF is the default for speed and reliability. Marker is available for higher-quality layout preservation but is slower and heavier; compare outputs before committing to it for the full corpus.
 - **Chunking quality is critical.** Test different sizes/overlaps on sample medical queries.
 - **MPS may fail on some operations.** Always test CPU fallback.
 - **Keep LLM prompts citation-strict** from day one to reduce hallucination.

@@ -81,6 +81,7 @@ curl -X POST http://localhost:8001/api/v1/autocomplete \
 - Local processing for PDF parsing, embedding, and NER
 - Docker used only for Qdrant, Redis, and API integration testing
 - Data under `data/` is never committed to Git
+- PDF parsing uses **PyMuPDF** by default; **Marker** is included as an optional layout-preserving parser
 - See `phases/` for detailed implementation plans
 - See `AGENTS.md` for coding conventions and agent instructions
 

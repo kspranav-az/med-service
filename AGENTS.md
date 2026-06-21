@@ -20,7 +20,7 @@ MedService is a medical-domain AI toolkit with two main services:
 ## Standard Commands
 
 ```bash
-# Install all dependencies
+# Install all dependencies (includes Marker; first sync may take a while)
 uv sync --extra all --group dev
 
 # Run the linter and formatter
@@ -39,6 +39,18 @@ docker compose up -d
 # Start services locally
 uv run uvicorn services.rag_chat_agent.api.main:app --reload --port 8000
 uv run uvicorn services.autocomplete.api.main:app --reload --port 8001
+```
+
+### Marker PDF parser (optional)
+
+Marker is included in the `rag` extras group. On first use it downloads models to `~/.cache/`.
+
+```bash
+# Verify Marker is installed
+uv run python -c "import marker; print(marker.__version__)"
+
+# Convert one PDF to Markdown with Marker (useful for comparison)
+uv run marker_single data/corpus/books/pediatric/<book.pdf> data/outputs/marker/<source_id> --batch_multiplier 1
 ```
 
 ## Project Structure
