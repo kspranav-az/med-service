@@ -59,7 +59,16 @@ uv run reindex-source --source urodynamics_iaps --parser pymupdf --batch-size 32
 uv run reindex-all --parser pymupdf --batch-size 32
 ```
 
-### 5. Run services locally
+### 5. Configure API keys
+
+Copy the example environment file and add your keys:
+
+```bash
+cp .env.example .env
+# Edit .env and set at least one LLM key
+```
+
+### 6. Run services locally
 
 ```bash
 # RAG Chat Agent (requires OPENAI_API_KEY, ANTHROPIC_API_KEY, or KIMI_API_KEY)
