@@ -41,16 +41,32 @@ uv run uvicorn services.rag_chat_agent.api.main:app --reload --port 8000
 uv run uvicorn services.autocomplete.api.main:app --reload --port 8001
 ```
 
+### RAG indexing commands
+
+```bash
+# Reindex a single source (fast test)
+uv run reindex-source --source urodynamics_iaps --parser pymupdf --batch-size 32
+
+# Parse all PDFs without indexing (useful for inspection)
+uv run ingest-pdfs --parser pymupdf --output-dir data/outputs/parsed
+
+# Reindex the entire corpus (long-running)
+uv run reindex-all --parser pymupdf --batch-size 32
+
+# Resume interrupted full reindex
+uv run reindex-all --parser pymupdf --batch-size 32
+
+# Restart full reindex from scratch
+uv run reindex-all --parser pymupdf --batch-size 32 --restart
+```
+
 ### Marker PDF parser (optional)
 
 Marker is included in the `rag` extras group. On first use it downloads models to `~/.cache/`.
 
 ```bash
-# Verify Marker is installed
-uv run python -c "import marker; print(marker.__version__)"
-
 # Convert one PDF to Markdown with Marker (useful for comparison)
-uv run marker_single data/corpus/books/pediatric/<book.pdf> data/outputs/marker/<source_id> --batch_multiplier 1
+uv run marker_single data/corpus/books/pediatric/<book.pdf> --output_dir data/outputs/marker/<source_id> --disable_image_extraction
 ```
 
 ## Project Structure

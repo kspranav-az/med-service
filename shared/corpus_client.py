@@ -47,18 +47,18 @@ def load_manifest() -> list[Source]:
     """
     path = _manifest_path()
     if not path.exists():
-        logger.error("manifest_not_found", manifest_path=str(path))
+        logger.error("manifest_not_found", extra={"manifest_path": str(path)})
         raise FileNotFoundError(f"Corpus manifest not found: {path}")
 
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
-        logger.error("manifest_parse_failed", error=str(exc))
+        logger.error("manifest_parse_failed", extra={"error": str(exc)})
         raise ValueError(f"Failed to parse manifest: {exc}") from exc
 
     books = data.get("books", [])
     sources = [Source.model_validate(_normalise_book(book)) for book in books]
-    logger.info("manifest_loaded", total_books=len(sources))
+    logger.info("manifest_loaded", extra={"total_books": len(sources)})
     return sources
 
 

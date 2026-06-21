@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import sys
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from shared.config import settings
@@ -21,7 +21,7 @@ class _JsonFormatter(logging.Formatter):
         attached to the record.
         """
         payload: dict[str, Any] = {
-            "timestamp": datetime.now(datetime.UTC).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),

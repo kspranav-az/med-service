@@ -49,10 +49,20 @@ uv run pytest                        # should pass
 uv run ruff check .                  # should pass
 ```
 
-### 4. Run services locally
+### 4. Index the corpus (long-running)
 
 ```bash
-# RAG Chat Agent
+# Test with one small source first
+uv run reindex-source --source urodynamics_iaps --parser pymupdf --batch-size 32
+
+# Index the full corpus (resume supported)
+uv run reindex-all --parser pymupdf --batch-size 32
+```
+
+### 5. Run services locally
+
+```bash
+# RAG Chat Agent (requires OPENAI_API_KEY or ANTHROPIC_API_KEY)
 uv run uvicorn services.rag_chat_agent.api.main:app --reload --port 8000
 
 # Semantic Autocomplete
@@ -64,7 +74,7 @@ Example requests:
 ```bash
 curl http://localhost:8000/api/v1/health
 
-curl -X POST http://localhost:8000/api/v1/chat \
+OPENAI_API_KEY=sk-... curl -X POST http://localhost:8000/api/v1/chat \
   -H 'Content-Type: application/json' \
   -d '{"query":"What are the first-line treatments for Type 2 Diabetes?"}'
 

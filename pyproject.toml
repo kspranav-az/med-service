@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "med-service"
 version = "0.1.0"
@@ -13,7 +17,7 @@ dependencies = [
     "python-multipart>=0.0.12",
 
     # Infrastructure clients
-    "qdrant-client>=1.12.0",
+    "qdrant-client>=1.18.0,<2.0.0",
     "redis>=5.2.0",
 
     # Utilities
@@ -32,6 +36,9 @@ rag = [
     "pymupdf>=1.24.0",
     # Optional high-quality layout-preserving parser (heavy, downloads models on first run)
     "marker-pdf>=1.0.0",
+    # LLM clients for RAG generation
+    "openai>=1.50.0",
+    "anthropic>=0.40.0",
 ]
 
 autocomplete = [
@@ -49,6 +56,11 @@ all = [
     "med-service[rag,autocomplete,eval]",
 ]
 
+[project.scripts]
+ingest-pdfs = "scripts.ingest_pdfs:main"
+reindex-source = "scripts.reindex_source:main"
+reindex-all = "scripts.reindex_all:main"
+
 [dependency-groups]
 dev = [
     "pytest>=8.3.0",
@@ -58,6 +70,13 @@ dev = [
     "ipython>=8.29.0",
     "jupyter>=1.1.0",
 ]
+
+[tool.uv]
+package = true
+
+[tool.setuptools.packages.find]
+include = ["shared*", "services*", "scripts*", "tests*"]
+exclude = ["data*", "phases*", "notebooks*", "qdrant_storage*", "redis_data*"]
 
 [tool.ruff]
 target-version = "py312"
