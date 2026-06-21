@@ -95,6 +95,7 @@ class ChatRequest(BaseModel):
     )
     require_citations: bool = Field(default=True, description="Return citations with the answer.")
     confidence_threshold: float = Field(default=0.75, ge=0.0, le=1.0)
+    max_tokens: int = Field(default=2048, ge=256, le=8192, description="Maximum LLM output tokens.")
     use_cache: bool = Field(default=True, description="Allow cached responses.")
 
 

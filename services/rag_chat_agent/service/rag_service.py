@@ -19,9 +19,12 @@ The context consists of excerpts from medical textbooks with source identifiers.
 
 Rules:
 1. Ground every claim in the provided context.
-2. Cite sources inline using [source_id, page NUMBER].
-3. If the context does not contain enough information, say so clearly and do not make up information.
-4. Be concise but medically precise.
+2. Cite sources inline using exactly this format: [source_id, page NUMBER].
+   Examples: [hadidi_hypospadias, page 77] [coran_pediatric_surgery_part_3, page 378]
+   When citing multiple sources in one place, separate them with semicolons: [hadidi_hypospadias, page 77; coran_pediatric_surgery_part_3, page 378]
+3. Do not abbreviate or omit the word "page".
+4. If the context does not contain enough information, say so clearly and do not make up information.
+5. Be concise but medically precise.
 
 Context:
 {context}
@@ -41,9 +44,27 @@ def _format_context(retrieved: list[dict[str, Any]]) -> str:
 
 
 def _extract_citations(text: str) -> list[tuple[str, int]]:
-    """Extract [source_id, page N] citations from generated text."""
-    pattern = re.compile(r"\[([^\]]+?),\s*page\s+(\d+)\]")
-    return [(source_id, int(page)) for source_id, page in pattern.findall(text)]
+    """Extract citations from generated text.
+
+    Supports:
+    - [source_id, page NUMBER]
+    - [source_id, NUMBER] (fallback if the model omits "page")
+    - Multiple citations separated by semicolons inside one bracket pair.
+    """
+    results: list[tuple[str, int]] = []
+    # Match bracket groups that may contain semicolon-separated citations.
+    bracket_pattern = re.compile(r"\[([^\]]+?)\]")
+    # Match a single citation like "source_id, page 123" or "source_id, 123".
+    citation_pattern = re.compile(r"([^,;]+?)\s*,\s*(?:page\s+)?(\d+)")
+
+    for match in bracket_pattern.finditer(text):
+        inner = match.group(1)
+        for source_id, page in citation_pattern.findall(inner):
+            source_id = source_id.strip()
+            if source_id:
+                results.append((source_id, int(page)))
+
+    return results
 
 
 class RAGService:
@@ -119,7 +140,7 @@ class RAGService:
                     messages=messages,
                     model=request.model,
                     temperature=0.1,
-                    max_tokens=1024,
+                    max_tokens=request.max_tokens,
                 )
             except Exception as exc:
                 logger.error("llm_generation_failed", extra={"error": str(exc)})

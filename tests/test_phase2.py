@@ -59,11 +59,30 @@ class TestCitations:
     """Tests for citation extraction."""
 
     def test_extract_citations(self) -> None:
-        text = "This is supported by [urodynamics_iaps, page 3] and [arm_holschneider_2, page 12]."
+        text = (
+            "This is supported by [urodynamics_iaps, page 3] "
+            "and [arm_holschneider_2, page 12]."
+        )
         citations = _extract_citations(text)
         assert citations == [
             ("urodynamics_iaps", 3),
             ("arm_holschneider_2", 12),
+        ]
+
+    def test_extract_citations_without_page_word(self) -> None:
+        text = "Sources: [hadidi_hypospadias, 77] and [coran_pediatric_surgery_part_3, 378]."
+        citations = _extract_citations(text)
+        assert citations == [
+            ("hadidi_hypospadias", 77),
+            ("coran_pediatric_surgery_part_3", 378),
+        ]
+
+    def test_extract_multiple_citations_in_brackets(self) -> None:
+        text = "[hadidi_hypospadias, page 77; coran_pediatric_surgery_part_3, page 378]"
+        citations = _extract_citations(text)
+        assert citations == [
+            ("hadidi_hypospadias", 77),
+            ("coran_pediatric_surgery_part_3", 378),
         ]
 
 
