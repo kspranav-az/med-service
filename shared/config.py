@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     anthropic_base_url: str = Field(default="https://api.anthropic.com", alias="ANTHROPIC_BASE_URL")
     kimi_api_key: str | None = Field(default=None, alias="KIMI_API_KEY")
     kimi_base_url: str = Field(default="https://api.kimi.com/coding/v1", alias="KIMI_BASE_URL")
-    default_llm_model: str = Field(default="gpt-4o", alias="DEFAULT_LLM_MODEL")
+    default_llm_model: str = Field(default="claude-sonnet-4-20250514", alias="DEFAULT_LLM_MODEL")
 
     @property
     def is_development(self) -> bool:

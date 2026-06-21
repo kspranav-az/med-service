@@ -40,8 +40,8 @@ docker compose up -d
 cp .env.example .env
 
 # Start services locally (set OPENAI_API_KEY, ANTHROPIC_API_KEY, or KIMI_API_KEY in .env)
-# Default Kimi base URL: https://api.kimi.com/coding/v1
-# Default Kimi model for requests: "kimi-for-coding"
+# For Kimi Code, set ANTHROPIC_BASE_URL=https://api.kimi.com/coding/
+# Default LLM model for Kimi Code: claude-sonnet-4-20250514
 uv run uvicorn services.rag_chat_agent.api.main:app --reload --port 8000
 uv run uvicorn services.autocomplete.api.main:app --reload --port 8001
 ```
