@@ -114,6 +114,7 @@ class QdrantVectorStore:
         chunks: list[Chunk],
         embeddings: NDArray[Any],
         version: int = 1,
+        upsert_batch_size: int = 500,
     ) -> None:
         """Insert or update chunks in the collection.
 
@@ -121,6 +122,7 @@ class QdrantVectorStore:
             chunks: Chunks to upsert.
             embeddings: Normalized embedding vectors of shape (n_chunks, dimension).
             version: Ingestion version number for the source.
+            upsert_batch_size: Number of points to send per Qdrant upsert request.
         """
         if len(chunks) != len(embeddings):
             raise ValueError("chunks and embeddings must have the same length")
@@ -147,18 +149,22 @@ class QdrantVectorStore:
                 )
             )
 
-        self.client.upsert(
-            collection_name=self.collection_name,
-            points=points,
-            wait=True,
-        )
+        total_upserted = 0
+        for i in range(0, len(points), upsert_batch_size):
+            batch = points[i : i + upsert_batch_size]
+            self.client.upsert(
+                collection_name=self.collection_name,
+                points=batch,
+                wait=True,
+            )
+            total_upserted += len(batch)
 
         logger.info(
             "chunks_upserted",
             extra={
                 "collection": self.collection_name,
                 "source_id": chunks[0].source_id if chunks else None,
-                "count": len(points),
+                "count": total_upserted,
                 "version": version,
             },
         )
