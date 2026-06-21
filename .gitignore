@@ -1,0 +1,64 @@
+# Data and secrets (NEVER commit)
+data/
+.env
+.env.*
+*.env
+secrets/
+config.local.toml
+
+# Python virtual environments
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Testing and coverage
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Logs
+*.log
+logs/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Node
+node_modules/
+
+# Local infrastructure data
+qdrant_storage/
+redis_data/
+postgres_data/
+.langfuse/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Outputs
+notebooks/outputs/
+scratch/
+tmp/
+temp/
