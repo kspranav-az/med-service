@@ -29,7 +29,7 @@ med-service/
 ### 1. Environment
 
 ```bash
-uv sync --extra all
+uv sync --extra all --group dev
 ```
 
 ### 2. Start local infrastructure
@@ -43,7 +43,36 @@ This starts Qdrant on port `6333` and Redis on port `6379`.
 ### 3. Verify
 
 ```bash
-uv run python --version  # Python 3.12.x
+uv run python --version              # Python 3.12.x
+uv run python -c "from shared.corpus_client import load_manifest; print(len(load_manifest()))"  # 24
+uv run pytest                        # should pass
+uv run ruff check .                  # should pass
+```
+
+### 4. Run services locally
+
+```bash
+# RAG Chat Agent
+uv run uvicorn services.rag_chat_agent.api.main:app --reload --port 8000
+
+# Semantic Autocomplete
+uv run uvicorn services.autocomplete.api.main:app --reload --port 8001
+```
+
+Example requests:
+
+```bash
+curl http://localhost:8000/api/v1/health
+
+curl -X POST http://localhost:8000/api/v1/chat \
+  -H 'Content-Type: application/json' \
+  -d '{"query":"What are the first-line treatments for Type 2 Diabetes?"}'
+
+curl http://localhost:8001/api/v1/health
+
+curl -X POST http://localhost:8001/api/v1/autocomplete \
+  -H 'Content-Type: application/json' \
+  -d '{"query":"myo","field_types":"T047,T191"}'
 ```
 
 ## Development Notes
@@ -53,9 +82,11 @@ uv run python --version  # Python 3.12.x
 - Docker used only for Qdrant, Redis, and API integration testing
 - Data under `data/` is never committed to Git
 - See `phases/` for detailed implementation plans
+- See `AGENTS.md` for coding conventions and agent instructions
 
 ## Documentation
 
 - `PRD.md` — Product Requirements Document
 - `CONTEXT.md` — Project context and conventions
+- `AGENTS.md` — Coding conventions and commands for agents
 - `phases/phase_01_foundation.md` — Phase 1 plan
