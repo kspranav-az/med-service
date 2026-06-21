@@ -79,10 +79,10 @@ OPENAI_API_KEY=sk-... curl -X POST http://localhost:8000/api/v1/chat \
   -H 'Content-Type: application/json' \
   -d '{"query":"What are the first-line treatments for Type 2 Diabetes?"}'
 
-# With Kimi (Moonshot)
-KIMI_API_KEY=sk-... curl -X POST http://localhost:8000/api/v1/chat \
+# With Kimi Code
+KIMI_API_KEY=Your_Kimi_Code_API_Key curl -X POST http://localhost:8000/api/v1/chat \
   -H 'Content-Type: application/json' \
-  -d '{"query":"What are the first-line treatments for Type 2 Diabetes?","model":"kimi-k2"}'
+  -d '{"query":"What are the first-line treatments for Type 2 Diabetes?","model":"kimi-for-coding"}'
 
 curl http://localhost:8001/api/v1/health
 

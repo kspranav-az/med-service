@@ -37,6 +37,8 @@ uv run pytest
 docker compose up -d
 
 # Start services locally (set OPENAI_API_KEY, ANTHROPIC_API_KEY, or KIMI_API_KEY)
+# Default Kimi base URL: https://api.kimi.com/coding/v1
+# Default Kimi model for requests: "kimi-for-coding"
 uv run uvicorn services.rag_chat_agent.api.main:app --reload --port 8000
 uv run uvicorn services.autocomplete.api.main:app --reload --port 8001
 ```
