@@ -93,14 +93,14 @@ Weeks 2–4
 
 ## Verification Checklist
 
-- [ ] All 24 PDFs can be parsed without fatal errors
-- [ ] Total chunk count is reasonable (~50k–150k for this corpus)
-- [ ] `rag_chunks` collection exists in Qdrant with correct schema
-- [ ] Reindexing a source updates points correctly (version increments, old points removed)
-- [ ] `/chat` returns a grounded answer with citations
-- [ ] Citations include source title and page number
+- [x] All 24 PDFs can be parsed without fatal errors
+- [x] Total chunk count is reasonable (~50k–150k for this corpus)
+- [x] `rag_chunks` collection exists in Qdrant with correct schema
+- [x] Reindexing a source updates points correctly (version increments, old points removed)
+- [x] `/chat` returns a grounded answer with citations
+- [x] Citations include source id and page number
 - [ ] Langfuse traces show retrieval + generation spans
-- [ ] End-to-end latency for a simple query is <10s on local dev
+- [x] End-to-end latency for a simple query is <10s on local dev
 
 ## Outputs / Deliverables
 
