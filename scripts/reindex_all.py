@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import time
 from pathlib import Path
 
 from scripts.indexing import index_source
@@ -114,6 +115,8 @@ def main() -> None:
         },
     )
 
+    start_time = time.perf_counter()
+
     # Load heavy resources once and reuse across sources.
     embedder = Embedder(model_name=args.embedding_model)
     store = QdrantVectorStore()
@@ -137,12 +140,22 @@ def main() -> None:
 
         save_progress(progress)
 
+    elapsed_seconds = time.perf_counter() - start_time
+    elapsed_hours = elapsed_seconds / 3600
+
     logger.info(
         "reindex_all_complete",
         extra={
             "completed": len(progress["completed"]),
             "failed": len(progress["failed"]),
+            "elapsed_seconds": round(elapsed_seconds, 2),
+            "elapsed_hours": round(elapsed_hours, 2),
         },
+    )
+    print(
+        f"\n✅ Reindex complete: {len(progress['completed'])}/{len(sources)} sources, "
+        f"{len(progress['failed'])} failed, "
+        f"elapsed: {elapsed_hours:.2f} hours ({elapsed_seconds:.1f} seconds)"
     )
 
 
