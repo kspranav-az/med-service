@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import functools
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from typing import Any, TypeVar
 
@@ -30,6 +30,10 @@ except ImportError:  # pragma: no cover
 class _NoOpSpan:
     """Span-like object that ignores all updates and nesting."""
 
+    def __init__(self, span_id: str | None = None) -> None:
+        """Initialise with a synthetic id so callers can read ``.id``."""
+        self.id = span_id or str(uuid.uuid4())
+
     def update(self, **kwargs: Any) -> None:  # noqa: ARG002
         """No-op update."""
         return None
@@ -37,6 +41,10 @@ class _NoOpSpan:
     def event(self, **kwargs: Any) -> None:  # noqa: ARG002
         """No-op event."""
         return None
+
+    def span(self, **kwargs: Any) -> _NoOpSpan:  # noqa: ARG002
+        """No-op nested span."""
+        return _NoOpSpan()
 
 
 _NO_OP_SPAN = _NoOpSpan()
@@ -48,7 +56,7 @@ class ObservabilityClient:
     def __init__(self) -> None:
         """Initialise the underlying Langfuse client if credentials are present."""
         self._client: Any | None = None
-        self._enabled = (
+        self._enabled = bool(
             _LANGFUSE_AVAILABLE and settings.langfuse_public_key and settings.langfuse_secret_key
         )
 
@@ -59,9 +67,12 @@ class ObservabilityClient:
                     secret_key=settings.langfuse_secret_key,
                     host=settings.langfuse_host,
                 )
-                logger.info("langfuse_client_initialised", host=settings.langfuse_host)
+                logger.info(
+                    "langfuse_client_initialised",
+                    extra={"host": settings.langfuse_host},
+                )
             except Exception as exc:  # pragma: no cover
-                logger.warning("langfuse_init_failed", error=str(exc))
+                logger.warning("langfuse_init_failed", extra={"error": str(exc)})
                 self._enabled = False
 
     @property
@@ -87,23 +98,35 @@ class ObservabilityClient:
             **kwargs: Additional Langfuse trace parameters.
 
         Returns:
-            A Langfuse trace object or a no-op span.
+            A Langfuse trace object or a no-op span with an ``id`` attribute.
         """
         if not self._enabled or self._client is None:
-            return _NO_OP_SPAN
+            return _NoOpSpan()
 
         try:
-            return self._client.trace(name=name, metadata=metadata, **kwargs)
+            trace = self._client.trace(name=name, metadata=metadata, **kwargs)
+            return trace if trace is not None else _NoOpSpan()
         except Exception as exc:  # pragma: no cover
-            logger.warning("langfuse_trace_failed", name=name, error=str(exc))
-            return _NO_OP_SPAN
+            logger.warning(
+                "langfuse_trace_failed",
+                extra={"name": name, "error": str(exc)},
+            )
+            return _NoOpSpan()
 
     @contextmanager
-    def trace_span(self, name: str, **kwargs: Any):
+    def trace_span(
+        self,
+        name: str,
+        trace: Any | None = None,
+        parent: Any | None = None,
+        **kwargs: Any,
+    ) -> Iterator[Any]:
         """Context manager for a nested span.
 
         Args:
             name: Span name.
+            trace: Optional parent Langfuse trace object.
+            parent: Optional parent span/observation object.
             **kwargs: Additional span attributes.
 
         Yields:
@@ -115,17 +138,28 @@ class ObservabilityClient:
 
         span = _NO_OP_SPAN
         try:
-            span = self._client.span(name=name, **kwargs)
+            if parent is not None:
+                span = parent.span(name=name, **kwargs)
+            elif trace is not None:
+                span = trace.span(name=name, **kwargs)
+            else:
+                span = self._client.span(name=name, **kwargs)
             yield span
         except Exception as exc:  # pragma: no cover
-            logger.warning("langfuse_span_failed", name=name, error=str(exc))
+            logger.warning(
+                "langfuse_span_failed",
+                extra={"name": name, "error": str(exc)},
+            )
             yield _NO_OP_SPAN
         finally:
             try:
                 if span is not _NO_OP_SPAN:
                     span.update()
             except Exception as exc:  # pragma: no cover
-                logger.warning("langfuse_span_update_failed", name=name, error=str(exc))
+                logger.warning(
+                    "langfuse_span_update_failed",
+                    extra={"name": name, "error": str(exc)},
+                )
 
 
 # Global singleton. Services should import this object.

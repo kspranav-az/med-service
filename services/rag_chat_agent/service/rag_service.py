@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
+import asyncio
 import re
 from typing import Any
 
 from services.rag_chat_agent.service.llm_client import LLMClient, LLMResponse
+from shared.cache.redis_cache import SemanticCache
+from shared.config import settings
+from shared.dedup.request_dedup import RequestDeduplicator
 from shared.embeddings.embedder import DEFAULT_MODEL, Embedder
 from shared.logging import get_logger
 from shared.models import ChatRequest, ChatResponse, Citation
 from shared.observability import observability
+from shared.reranker.reranker import Reranker, get_reranker
 from shared.vector_store.qdrant_store import QdrantVectorStore
 
 logger = get_logger(__name__)
@@ -68,13 +73,16 @@ def _extract_citations(text: str) -> list[tuple[str, int]]:
 
 
 class RAGService:
-    """End-to-end RAG pipeline."""
+    """End-to-end RAG pipeline with reranking, caching, and deduplication."""
 
     def __init__(
         self,
         embedder: Embedder | None = None,
         vector_store: QdrantVectorStore | None = None,
         llm_client: LLMClient | None = None,
+        reranker: Reranker | None = None,
+        cache: SemanticCache | None = None,
+        deduplicator: RequestDeduplicator | None = None,
     ) -> None:
         """Initialise the RAG service.
 
@@ -82,10 +90,16 @@ class RAGService:
             embedder: Embedding model. Created lazily if not provided.
             vector_store: Qdrant vector store client.
             llm_client: LLM client for generation.
+            reranker: Cross-encoder reranker. Created lazily if not provided.
+            cache: Redis-backed semantic cache.
+            deduplicator: Redis-backed request deduplicator.
         """
         self._embedder = embedder
         self.vector_store = vector_store or QdrantVectorStore()
         self.llm_client = llm_client or LLMClient()
+        self._reranker = reranker
+        self._cache = cache or SemanticCache()
+        self._deduplicator = deduplicator or RequestDeduplicator()
 
     @property
     def embedder(self) -> Embedder:
@@ -94,13 +108,21 @@ class RAGService:
             self._embedder = Embedder(model_name=DEFAULT_MODEL)
         return self._embedder
 
+    @property
+    def reranker(self) -> Reranker:
+        """Lazy-load the cross-encoder reranker."""
+        if self._reranker is None:
+            self._reranker = get_reranker(settings.rag_default_reranker)
+        return self._reranker
+
     async def retrieve(
         self,
         query: str,
         top_k: int = 20,
+        trace: Any | None = None,
     ) -> list[dict[str, Any]]:
         """Retrieve the top-k relevant chunks for a query."""
-        with observability.trace_span(name="rag_retrieve"):
+        with observability.trace_span(name="rag_retrieve", trace=trace):
             query_embedding = self.embedder.encode([query], show_progress=False)
             results = self.vector_store.search(
                 query_embedding=query_embedding[0],
@@ -112,18 +134,46 @@ class RAGService:
             )
             return results
 
+    async def _rerank(
+        self,
+        request: ChatRequest,
+        retrieved: list[dict[str, Any]],
+        trace: Any | None = None,
+    ) -> list[dict[str, Any]]:
+        """Rerank retrieved chunks down to ``request.rerank_top_k``."""
+        if not retrieved:
+            return []
+
+        with observability.trace_span(name="rag_rerank", trace=trace):
+            try:
+                reranked = await asyncio.to_thread(
+                    self.reranker.rerank,
+                    request.query,
+                    retrieved,
+                    top_k=request.rerank_top_k,
+                )
+                return reranked
+            except Exception as exc:
+                logger.warning(
+                    "rerank_failed",
+                    extra={"error": str(exc), "query": request.query},
+                )
+                return retrieved[: request.rerank_top_k]
+
     async def generate(
         self,
         request: ChatRequest,
         retrieved: list[dict[str, Any]],
+        trace: Any | None = None,
     ) -> ChatResponse:
         """Generate an answer from retrieved chunks."""
-        with observability.trace_span(name="rag_generate"):
+        with observability.trace_span(name="rag_generate", trace=trace):
             if not retrieved:
                 return ChatResponse(
                     answer="I could not find relevant context to answer this question.",
                     citations=[],
                     confidence=0.0,
+                    confidence_passed=False,
                     trace_id=observability.trace_id(),
                     reranker_used=request.reranker,
                     cached=False,
@@ -148,6 +198,7 @@ class RAGService:
                     answer="An error occurred while generating the answer.",
                     citations=[],
                     confidence=0.0,
+                    confidence_passed=False,
                     trace_id=observability.trace_id(),
                     reranker_used=request.reranker,
                     cached=False,
@@ -155,21 +206,75 @@ class RAGService:
 
             citations = self._build_citations(retrieved, llm_response.text)
             confidence = self._estimate_confidence(retrieved, citations)
+            confidence_passed = confidence >= request.confidence_threshold
+
+            answer = llm_response.text
+            if not confidence_passed:
+                answer = f"[Low confidence: {confidence}] {answer}"
 
             return ChatResponse(
-                answer=llm_response.text,
+                answer=answer,
                 citations=citations,
                 confidence=confidence,
+                confidence_passed=confidence_passed,
                 tokens_used=llm_response.input_tokens + llm_response.output_tokens,
                 trace_id=observability.trace_id(),
                 reranker_used=request.reranker,
                 cached=False,
             )
 
-    async def answer(self, request: ChatRequest) -> ChatResponse:
-        """Run the full RAG pipeline for a chat request."""
-        retrieved = await self.retrieve(request.query, top_k=request.top_k)
-        return await self.generate(request, retrieved)
+    async def answer(
+        self,
+        request: ChatRequest,
+        trace: Any | None = None,
+    ) -> ChatResponse:
+        """Run the full RAG pipeline for a chat request.
+
+        Handles caching and request deduplication. The returned response
+        always carries the current trace identifier.
+        """
+
+        def _cache_args() -> tuple[str, str | None, str, int]:
+            return (
+                request.query,
+                request.model,
+                request.reranker,
+                request.rerank_top_k,
+            )
+
+        if request.use_cache:
+            cached = await self._cache.get(*_cache_args())
+            if cached is not None:
+                response = ChatResponse.model_validate(cached)
+                response.cached = True
+                response.trace_id = observability.trace_id()
+                logger.info(
+                    "cache_hit",
+                    extra={"query": request.query, "trace_id": response.trace_id},
+                )
+                return response
+
+        async def _compute() -> ChatResponse:
+            retrieved = await self.retrieve(request.query, top_k=request.top_k, trace=trace)
+            reranked = await self._rerank(request, retrieved, trace=trace)
+            response = await self.generate(request, reranked, trace=trace)
+            if request.use_cache:
+                await self._cache.set(
+                    *_cache_args(),
+                    value=response.model_dump(mode="json"),
+                )
+            return response
+
+        response = await self._deduplicator.execute(
+            *_cache_args(),
+            factory=_compute,
+        )
+
+        if isinstance(response, dict):
+            response = ChatResponse.model_validate(response)
+
+        response.trace_id = observability.trace_id()
+        return response
 
     def _build_citations(
         self,
@@ -221,9 +326,13 @@ class RAGService:
         retrieved: list[dict[str, Any]],
         citations: list[Citation],
     ) -> float:
-        """Estimate answer confidence from retrieval scores and citations."""
+        """Estimate answer confidence from retrieval/reranker scores and citations."""
         if not retrieved:
             return 0.0
-        top_score = max(hit.get("score", 0.0) for hit in retrieved)
-        citation_ratio = len(citations) / max(len(retrieved), 1)
-        return round(min(top_score * citation_ratio, 1.0), 2)
+
+        top_scores = [float(hit.get("score", 0.0)) for hit in retrieved[:5]]
+        avg_score = sum(top_scores) / len(top_scores)
+        # Citation factor ranges from 0.7 (no citations) to 1.0 (two or more).
+        # A single strong citation therefore receives 0.85 of the score weight.
+        citation_factor = 0.7 + 0.3 * min(len(citations) / 2.0, 1.0)
+        return float(round(min(avg_score * citation_factor, 1.0), 2))

@@ -1793,6 +1793,7 @@ source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
     { name = "httpx" },
+    { name = "langfuse" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "python-dotenv" },
@@ -1851,6 +1852,7 @@ requires-dist = [
     { name = "anthropic", marker = "extra == 'rag'", specifier = ">=0.40.0" },
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "httpx", specifier = ">=0.27.0" },
+    { name = "langfuse", specifier = ">=2.53.0" },
     { name = "langfuse", marker = "extra == 'eval'", specifier = ">=2.53.0" },
     { name = "marker-pdf", marker = "extra == 'rag'", specifier = ">=1.0.0" },
     { name = "med-service", extras = ["rag", "autocomplete", "eval"], marker = "extra == 'all'" },

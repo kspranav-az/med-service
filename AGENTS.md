@@ -28,7 +28,7 @@ uv run ruff check .
 uv run ruff format .
 
 # Run type checks (optional but encouraged)
-uv run mypy shared/ services/
+uv run mypy shared services scripts tests
 
 # Run tests
 uv run pytest
@@ -83,6 +83,9 @@ uv run marker_single data/corpus/books/pediatric/<book.pdf> --output_dir data/ou
   - `shared/logging.py` — Structured JSON logging.
   - `shared/corpus_client.py` — Corpus manifest loader and path resolver.
   - `shared/observability/` — Langfuse tracing wrapper with no-op fallback.
+  - `shared/reranker/` — Cross-encoder rerankers (MiniLM default, BGE-Reranker optional).
+  - `shared/cache/` — Redis-backed semantic result cache for the RAG pipeline.
+  - `shared/dedup/` — Redis-backed request deduplication for concurrent queries.
 - `tests/` — Pytest test suite.
 - `scripts/` — Utility scripts.
 - `notebooks/` — Exploration notebooks.

@@ -38,6 +38,16 @@ class Settings(BaseSettings):
     # Redis
     redis_url: str = Field(default="redis://localhost:6379/0", alias="REDIS_URL")
 
+    # RAG caching & deduplication
+    rag_cache_ttl_seconds: int = Field(default=3600, alias="RAG_CACHE_TTL_SECONDS")
+    rag_dedup_lock_ttl_seconds: int = Field(default=60, alias="RAG_DEDUP_LOCK_TTL_SECONDS")
+    rag_dedup_max_wait_seconds: float = Field(default=30.0, alias="RAG_DEDUP_MAX_WAIT_SECONDS")
+
+    # RAG reranker
+    rag_default_reranker: str = Field(default="minilm", alias="RAG_DEFAULT_RERANKER")
+    rag_reranker_device: str | None = Field(default=None, alias="RAG_RERANKER_DEVICE")
+    rag_reranker_batch_size: int = Field(default=16, alias="RAG_RERANKER_BATCH_SIZE")
+
     # Langfuse (optional in dev)
     langfuse_public_key: str | None = Field(default=None, alias="LANGFUSE_PUBLIC_KEY")
     langfuse_secret_key: str | None = Field(default=None, alias="LANGFUSE_SECRET_KEY")

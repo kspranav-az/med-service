@@ -94,7 +94,7 @@ class ChatRequest(BaseModel):
         description="Reranker tier to use.",
     )
     require_citations: bool = Field(default=True, description="Return citations with the answer.")
-    confidence_threshold: float = Field(default=0.75, ge=0.0, le=1.0)
+    confidence_threshold: float = Field(default=0.65, ge=0.0, le=1.0)
     max_tokens: int = Field(default=2048, ge=256, le=8192, description="Maximum LLM output tokens.")
     use_cache: bool = Field(default=True, description="Allow cached responses.")
 
@@ -107,6 +107,10 @@ class ChatResponse(BaseModel):
     answer: str = Field(..., description="Generated answer.")
     citations: list[Citation] = Field(default_factory=list)
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    confidence_passed: bool = Field(
+        default=True,
+        description="True when confidence meets or exceeds the request threshold.",
+    )
     tokens_used: int | None = Field(default=None, ge=0)
     trace_id: str | None = Field(default=None)
     reranker_used: str | None = Field(default=None)

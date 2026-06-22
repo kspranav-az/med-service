@@ -87,17 +87,22 @@ Weeks 4–6
 - **Evaluation:** Start with manual QA pairs; expand over time.
 - **Cost tracking:** Log LLM tokens and estimated cost in every Langfuse trace.
 
+## Status
+
+Items 1 (Hybrid Search), 5 (Conversation History), 8 (RAGAS Evaluation), and 9 (Admin Endpoints)
+are planned for a later iteration. The remaining enhancements have been implemented.
+
 ## Verification Checklist
 
-- [ ] Tier 1 reranker improves ranking over vector-only retrieval
-- [ ] Tier 2 reranker selectable via API
-- [ ] Redis cache returns results for repeated queries
+- [x] Tier 1 reranker improves ranking over vector-only retrieval
+- [x] Tier 2 reranker selectable via API (`reranker` field)
+- [x] Redis cache returns results for repeated queries
 - [ ] Reindexing a source invalidates relevant cache entries
-- [ ] Simultaneous identical queries trigger only one LLM call
+- [x] Simultaneous identical queries trigger only one LLM call
 - [ ] Conversation history changes answers contextually
 - [ ] RAGAS faithfulness >0.80 on test set
 - [ ] End-to-end P95 latency <3s with Tier 1 reranker
-- [ ] Langfuse shows full trace per request
+- [x] Langfuse shows full trace per request
 
 ## Outputs / Deliverables
 

@@ -109,6 +109,7 @@ curl -X POST http://localhost:8001/api/v1/autocomplete \
 - Docker used only for Qdrant, Redis, and API integration testing
 - Data under `data/` is never committed to Git
 - PDF parsing uses **PyMuPDF** by default; **Marker** is included as an optional layout-preserving parser
+- RAG pipeline includes a two-tier cross-encoder reranker, Redis result cache, request deduplication, confidence scoring, and Langfuse tracing
 - See `phases/` for detailed implementation plans
 - See `AGENTS.md` for coding conventions and agent instructions
 

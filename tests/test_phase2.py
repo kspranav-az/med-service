@@ -8,12 +8,14 @@ import numpy as np
 import pytest
 
 from services.rag_chat_agent.service.rag_service import RAGService, _extract_citations
+from shared.cache.redis_cache import SemanticCache
 from shared.chunking import Chunker, ChunkingConfig
 from shared.corpus_client import get_source_by_id, resolve_source_path
-from shared.embeddings.embedder import Embedder
+from shared.dedup.request_dedup import RequestDeduplicator
 from shared.ingestion import ParserType, get_parser
 from shared.models import ChatRequest, Chunk
 from shared.vector_store.qdrant_store import QdrantVectorStore
+from tests.conftest import FakeRedis
 
 
 class TestPyMuPDFParser:
@@ -89,36 +91,23 @@ class TestCitations:
 class TestRAGService:
     """Tests for the RAG service with mocked dependencies."""
 
-    @pytest.fixture
-    def mock_embedder(self) -> MagicMock:
-        embedder = MagicMock(spec=Embedder)
-        embedder.dimension = 768
-        embedder.encode.return_value = np.array([[1.0] + [0.0] * 767], dtype=np.float32)
-        return embedder
-
-    @pytest.fixture
-    def mock_store(self) -> MagicMock:
-        store = MagicMock(spec=QdrantVectorStore)
-        store.search.return_value = [
-            {
-                "id": "test_00001",
-                "score": 0.95,
-                "payload": {
-                    "source_id": "urodynamics_iaps",
-                    "page_number": 2,
-                    "text": "sample context",
-                },
-            }
-        ]
-        return store
-
     @pytest.mark.asyncio
     async def test_answer_with_mocked_llm(
         self,
         mock_embedder: MagicMock,
         mock_store: MagicMock,
+        fake_redis: FakeRedis,
     ) -> None:
-        service = RAGService(embedder=mock_embedder, vector_store=mock_store)
+        mock_reranker = MagicMock()
+        mock_reranker.rerank.return_value = mock_store.search.return_value
+
+        service = RAGService(
+            embedder=mock_embedder,
+            vector_store=mock_store,
+            reranker=mock_reranker,
+            cache=SemanticCache(client=fake_redis),
+            deduplicator=RequestDeduplicator(client=fake_redis),
+        )
         service.llm_client = AsyncMock()
         service.llm_client.complete.return_value = MagicMock(
             text="Answer based on [urodynamics_iaps, page 2].",
@@ -127,7 +116,7 @@ class TestRAGService:
             output_tokens=20,
         )
 
-        request = ChatRequest(query="test question", top_k=5)
+        request = ChatRequest(query="test question", top_k=5, confidence_threshold=0.5)
         response = await service.answer(request)
 
         assert "Answer based on" in response.answer
@@ -135,21 +124,30 @@ class TestRAGService:
         assert response.citations[0].source_id == "urodynamics_iaps"
         assert response.citations[0].page == 2
         assert response.tokens_used == 120
+        assert response.confidence_passed is True
 
     @pytest.mark.asyncio
     async def test_answer_no_retrieved_chunks(
         self,
         mock_embedder: MagicMock,
+        fake_redis: FakeRedis,
     ) -> None:
         store = MagicMock(spec=QdrantVectorStore)
         store.search.return_value = []
 
-        service = RAGService(embedder=mock_embedder, vector_store=store)
+        service = RAGService(
+            embedder=mock_embedder,
+            vector_store=store,
+            reranker=MagicMock(),
+            cache=SemanticCache(client=fake_redis),
+            deduplicator=RequestDeduplicator(client=fake_redis),
+        )
         request = ChatRequest(query="unknown topic", top_k=5)
         response = await service.answer(request)
 
         assert "could not find relevant context" in response.answer
         assert response.confidence == 0.0
+        assert response.confidence_passed is False
 
 
 class TestQdrantStore:
