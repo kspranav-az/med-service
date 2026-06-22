@@ -7,7 +7,7 @@ name = "med-service"
 version = "0.1.0"
 description = "Medical-domain AI toolkit: RAG Chat Agent + Semantic Autocomplete"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.12,<3.13"
 dependencies = [
     # API & data models
     "fastapi>=0.115.0",
@@ -25,6 +25,7 @@ dependencies = [
     "tenacity>=9.0.0",
     "tqdm>=4.66.0",
     "python-dotenv>=1.0.0",
+    "numpy<2.0",
 
     # Observability
     "langfuse>=2.53.0",
@@ -46,7 +47,8 @@ rag = [
 
 autocomplete = [
     "scispacy>=0.5.4",
-    "spacy>=3.7.0",
+    "spacy>=3.7.0,<3.8.0",
+    "rapidfuzz>=3.0.0",
 ]
 
 eval = [
@@ -63,6 +65,8 @@ all = [
 ingest-pdfs = "scripts.ingest_pdfs:main"
 reindex-source = "scripts.reindex_source:main"
 reindex-all = "scripts.reindex_all:main"
+extract-entities = "scripts.extract_entities:main"
+index-entities = "scripts.index_entities:main"
 
 [dependency-groups]
 dev = [

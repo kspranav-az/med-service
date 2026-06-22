@@ -21,7 +21,7 @@ VERSIONS_FILE = Path("data/outputs/source_versions.json")
 def load_next_version(source_id: str) -> int:
     """Return the next ingestion version for a source."""
     if VERSIONS_FILE.exists():
-        versions = json.loads(VERSIONS_FILE.read_text(encoding="utf-8"))
+        versions: dict[str, int] = json.loads(VERSIONS_FILE.read_text(encoding="utf-8"))
     else:
         versions = {}
 

@@ -2,7 +2,7 @@
 ## Medical AI System: RAG Chat Agent + Semantic Autocomplete
 **Version:** 1.2 (Updated)  
 **Date:** June 21, 2026  
-**Status:** Draft for Review
+**Status:** Draft — Phase 4 implemented
 
 ---
 
@@ -431,13 +431,16 @@ def invalidate_source_cache(source_id: str):
 
 ### 9.5 Rate Limiting (AC-12)
 
-**Purpose:** Protect autocomplete endpoint from abuse.
+**Purpose:** Protect API endpoints from abuse while allowing different traffic profiles for chat and autocomplete.
 
 **Rules:**
-- 60 requests per minute per IP address
-- Token bucket algorithm via Redis
-- Burst allowance: 10 requests
+- Redis token-bucket algorithm per IP address
 - Exceeded limit: HTTP 429 with `Retry-After` header
+
+| Endpoint | Requests / window | Burst |
+|----------|-------------------|-------|
+| `POST /api/v1/autocomplete` | 60 / min | 10 |
+| `POST /api/v1/chat` | 10 / min | 3 |
 
 ### 9.6 Observability (Langfuse)
 
@@ -580,7 +583,7 @@ def invalidate_source_cache(source_id: str):
 | **Phase 1: Foundation** | Week 1 | Local dev environment + project skeleton | uv + Python 3.12; Docker Compose (Qdrant + Redis); repo structure; shared models |
 | **Phase 2: RAG Pipeline** | Weeks 2-4 | Working question-answering over pediatric corpus | PDF ingestion; chunking; BGE embeddings; Qdrant `rag_chunks`; basic `/chat` endpoint |
 | **Phase 3: RAG Enhancements** | Weeks 4-6 | Production-ready RAG | Hybrid search; two-tier reranker; Redis cache + invalidation; request deduplication; Langfuse; RAGAS eval |
-| **Phase 4: Autocomplete Foundation** | Weeks 6-7 | Autocomplete skeleton with placeholder entities | SciSpaCy extraction; pluggable entity provider; trie; `/autocomplete` endpoint; Redis cache; rate limiting |
+| **Phase 4: Autocomplete Foundation** | Implemented | Autocomplete skeleton with placeholder entities | SciSpaCy extraction; pluggable entity provider; trie; fuzzy matching; semantic expansion; `/autocomplete` endpoint; Redis cache; rate limiting |
 | **Phase 5: UMLS Integration** | After license approval | Full UMLS-backed autocomplete | QuickUMLS + GLiNER; CUI/TUI normalization; SapBERT vectors; all 127 TUI filters |
 | **Phase 6: Production Hardening** | Weeks 8-10 | Compliance, security, deployment | HIPAA-aligned setup; audit logging; admin dashboard; VPS deployment; load testing |
 

@@ -20,6 +20,7 @@ from qdrant_client.models import (
     QueryResponse,
     ScalarQuantization,
     ScalarQuantizationConfig,
+    ScalarType,
     VectorParams,
 )
 
@@ -84,7 +85,7 @@ class QdrantVectorStore:
                 distance=Distance.COSINE,
             ),
             quantization_config=ScalarQuantization(
-                scalar=ScalarQuantizationConfig(type="int8", always_ram=False),
+                scalar=ScalarQuantizationConfig(type=ScalarType.INT8, always_ram=False),
             ),
         )
 
@@ -195,7 +196,7 @@ class QdrantVectorStore:
                 ]
             ),
         )
-        deleted = result.operation_id if result else 0
+        deleted = result.operation_id if result and result.operation_id is not None else 0
         logger.info(
             "chunks_deleted_by_source",
             extra={"collection": self.collection_name, "source_id": source_id, "deleted": deleted},
@@ -370,7 +371,7 @@ def _fuse_results(
         scores[key] = scores.get(key, 0.0) + 1.0 / (k + rank + 1)
         items[key] = hit
 
-    sorted_keys = sorted(scores, key=scores.get, reverse=True)  # type: ignore[arg-type]
+    sorted_keys = sorted(scores, key=lambda k: scores[k], reverse=True)
     return [
         {**items[key], "score": round(scores[key], 4)}
         for key in sorted_keys[:top_k]

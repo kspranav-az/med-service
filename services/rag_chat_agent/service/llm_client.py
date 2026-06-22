@@ -106,10 +106,13 @@ class LLMClient:
     ) -> LLMResponse:
         import openai
 
+        if self._openai is None:
+            raise RuntimeError("OpenAI API key not configured")
+
         try:
-            response = await self._openai.chat.completions.create(  # type: ignore[union-attr]
+            response = await self._openai.chat.completions.create(
                 model=model,
-                messages=messages,  # type: ignore[arg-type]
+                messages=messages,
                 temperature=temperature,
                 max_tokens=max_tokens,
             )
@@ -135,10 +138,13 @@ class LLMClient:
         """Call Kimi's OpenAI-compatible API."""
         import openai
 
+        if self._kimi is None:
+            raise RuntimeError("Kimi API key not configured")
+
         try:
-            response = await self._kimi.chat.completions.create(  # type: ignore[union-attr]
+            response = await self._kimi.chat.completions.create(
                 model=model,
-                messages=messages,  # type: ignore[arg-type]
+                messages=messages,
                 temperature=temperature,
                 max_tokens=max_tokens,
             )
@@ -163,6 +169,9 @@ class LLMClient:
     ) -> LLMResponse:
         import anthropic
 
+        if self._anthropic is None:
+            raise RuntimeError("Anthropic API key not configured")
+
         system = ""
         conversation = messages
         if messages and messages[0]["role"] == "system":
@@ -170,10 +179,10 @@ class LLMClient:
             conversation = messages[1:]
 
         try:
-            response = await self._anthropic.messages.create(  # type: ignore[union-attr]
+            response = await self._anthropic.messages.create(
                 model=model,
                 system=system,
-                messages=conversation,  # type: ignore[arg-type]
+                messages=conversation,
                 temperature=temperature,
                 max_tokens=max_tokens,
             )

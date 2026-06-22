@@ -20,10 +20,10 @@ try:
 
     _MARKER_AVAILABLE = True
 except ImportError:  # pragma: no cover
-    ConfigParser = None  # type: ignore[misc, assignment]
-    PdfConverter = None  # type: ignore[misc, assignment]
-    create_model_dict = None  # type: ignore[misc, assignment]
-    text_from_rendered = None  # type: ignore[misc, assignment]
+    ConfigParser = None
+    PdfConverter = None
+    create_model_dict = None
+    text_from_rendered = None
     _MARKER_AVAILABLE = False
 
 

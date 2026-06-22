@@ -48,6 +48,14 @@ class Settings(BaseSettings):
     rag_reranker_device: str | None = Field(default=None, alias="RAG_RERANKER_DEVICE")
     rag_reranker_batch_size: int = Field(default=16, alias="RAG_RERANKER_BATCH_SIZE")
 
+    # Rate limiting
+    rate_limit_autocomplete_requests: int = Field(default=60, alias="RATE_LIMIT_AUTOCOMPLETE_REQUESTS")
+    rate_limit_autocomplete_window_seconds: int = Field(default=60, alias="RATE_LIMIT_AUTOCOMPLETE_WINDOW_SECONDS")
+    rate_limit_autocomplete_burst: int = Field(default=10, alias="RATE_LIMIT_AUTOCOMPLETE_BURST")
+    rate_limit_chat_requests: int = Field(default=10, alias="RATE_LIMIT_CHAT_REQUESTS")
+    rate_limit_chat_window_seconds: int = Field(default=60, alias="RATE_LIMIT_CHAT_WINDOW_SECONDS")
+    rate_limit_chat_burst: int = Field(default=3, alias="RATE_LIMIT_CHAT_BURST")
+
     # Langfuse (optional in dev)
     langfuse_public_key: str | None = Field(default=None, alias="LANGFUSE_PUBLIC_KEY")
     langfuse_secret_key: str | None = Field(default=None, alias="LANGFUSE_SECRET_KEY")

@@ -61,7 +61,10 @@ def parse_args() -> argparse.Namespace:
 
 def load_progress() -> dict[str, list[str]]:
     if PROGRESS_FILE.exists():
-        return json.loads(PROGRESS_FILE.read_text(encoding="utf-8"))
+        progress: dict[str, list[str]] = json.loads(
+            PROGRESS_FILE.read_text(encoding="utf-8")
+        )
+        return progress
     return {"completed": [], "failed": []}
 
 

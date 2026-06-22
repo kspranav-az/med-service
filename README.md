@@ -47,6 +47,7 @@ uv run python --version              # Python 3.12.x
 uv run python -c "from shared.corpus_client import load_manifest; print(len(load_manifest()))"  # 24
 uv run pytest                        # should pass
 uv run ruff check .                  # should pass
+uv run mypy shared services scripts tests  # should pass
 ```
 
 ### 4. Index the corpus (long-running)
@@ -59,7 +60,22 @@ uv run reindex-source --source urodynamics_iaps --parser pymupdf --batch-size 32
 uv run reindex-all --parser pymupdf --batch-size 32
 ```
 
-### 5. Configure API keys
+### 5. Build the autocomplete entity index (long-running)
+
+The autocomplete service needs extracted entities indexed in Qdrant.
+
+```bash
+# Install the SciSpaCy NER model (one-time; uv sync does not persist it)
+uv pip install https://s3-us-west-2.amazonaws.com/ai2-s2-scispacy/releases/v0.5.4/en_core_sci_md-0.5.4.tar.gz
+
+# Extract entities from the corpus (~30-120 min depending on hardware)
+uv run extract-entities
+
+# Embed and index them in Qdrant
+uv run index-entities
+```
+
+### 6. Configure API keys
 
 Copy the example environment file and add your keys:
 
@@ -68,7 +84,7 @@ cp .env.example .env
 # Edit .env and set at least one LLM key
 ```
 
-### 6. Run services locally
+### 7. Run services locally
 
 ```bash
 # RAG Chat Agent (requires OPENAI_API_KEY, ANTHROPIC_API_KEY, or KIMI_API_KEY)
@@ -99,8 +115,19 @@ curl http://localhost:8001/api/v1/health
 
 curl -X POST http://localhost:8001/api/v1/autocomplete \
   -H 'Content-Type: application/json' \
-  -d '{"query":"myo","field_types":"T047,T191"}'
+  -d '{"query":"myo","field_types":"T047,T191","limit":10,"fuzzy":true,"semantic_expansion":true}'
 ```
+
+## Rate Limits
+
+Both endpoints use Redis token-bucket rate limiters with separate limits per IP:
+
+| Endpoint | Limit | Burst |
+|----------|-------|-------|
+| `POST /api/v1/chat` | 10 req / min | 3 |
+| `POST /api/v1/autocomplete` | 60 req / min | 10 |
+
+Configure limits via environment variables (see `shared/config.py`).
 
 ## Development Notes
 
@@ -109,7 +136,9 @@ curl -X POST http://localhost:8001/api/v1/autocomplete \
 - Docker used only for Qdrant, Redis, and API integration testing
 - Data under `data/` is never committed to Git
 - PDF parsing uses **PyMuPDF** by default; **Marker** is included as an optional layout-preserving parser
-- RAG pipeline includes a two-tier cross-encoder reranker, Redis result cache, request deduplication, confidence scoring, and Langfuse tracing
+- RAG pipeline includes hybrid search, a two-tier cross-encoder reranker, Redis result cache, request deduplication, confidence scoring, and Langfuse tracing
+- Autocomplete uses a character-level trie for prefix matching, `rapidfuzz` for typo tolerance, BGE embeddings for semantic expansion, and reciprocal rank fusion (RRF) to merge result streams
+- The autocomplete entity provider is currently SciSpaCy-only (`en_core_sci_md`) with placeholder TUIs; a UMLS-backed provider is planned for Phase 5
 - See `phases/` for detailed implementation plans
 - See `AGENTS.md` for coding conventions and agent instructions
 

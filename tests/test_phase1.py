@@ -94,10 +94,20 @@ class TestAutocompleteService:
         assert response.status_code == 200
         assert response.json()["status"] == "ok"
 
-    def test_autocomplete_stub(self, client: TestClient) -> None:
+    def test_autocomplete_empty_without_entities(
+        self,
+        client: TestClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(
+            settings,
+            "project_root",
+            settings.project_root / "nonexistent",
+        )
         request = AutocompleteRequest(query="myo", field_types="T047,T191")
         response = client.post("/api/v1/autocomplete", json=request.model_dump())
         assert response.status_code == 200
         data = response.json()
         assert data["query"] == "myo"
-        assert len(data["results"]) == 1
+        assert data["results"] == []
+        assert data["cached"] is False

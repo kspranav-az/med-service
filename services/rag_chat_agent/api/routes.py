@@ -4,16 +4,19 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
 from services.rag_chat_agent.service.rag_service import RAGService
 from shared.config import settings
 from shared.logging import get_logger
 from shared.models import ChatRequest, ChatResponse
 from shared.observability import observability
+from shared.rate_limit import RateLimiter, RateLimitExceededError
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["chat"])
+
+_chat_limiter = RateLimiter.for_chat()
 
 
 @lru_cache(maxsize=1)
@@ -32,7 +35,7 @@ async def health() -> dict[str, str]:
 
 
 @router.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest) -> ChatResponse:
+async def chat(request: Request, req: ChatRequest) -> ChatResponse:
     """Answer a medical question using retrieval-augmented generation."""
     if not settings.openai_api_key and not settings.anthropic_api_key and not settings.kimi_api_key:
         raise HTTPException(
@@ -40,28 +43,38 @@ async def chat(request: ChatRequest) -> ChatResponse:
             detail="No LLM API key configured. Set OPENAI_API_KEY, ANTHROPIC_API_KEY, or KIMI_API_KEY.",
         )
 
+    identifier = request.client.host if request.client else "anonymous"
+    try:
+        await _chat_limiter.check(identifier)
+    except RateLimitExceededError as exc:
+        raise HTTPException(
+            status_code=429,
+            detail="Rate limit exceeded",
+            headers={"Retry-After": str(exc.retry_after)},
+        ) from exc
+
     trace = observability.start_trace(
         name="rag_chat",
         metadata={
-            "query": request.query,
-            "model": request.model or settings.default_llm_model,
-            "reranker": request.reranker,
-            "top_k": request.top_k,
-            "rerank_top_k": request.rerank_top_k,
-            "use_cache": request.use_cache,
+            "query": req.query,
+            "model": req.model or settings.default_llm_model,
+            "reranker": req.reranker,
+            "top_k": req.top_k,
+            "rerank_top_k": req.rerank_top_k,
+            "use_cache": req.use_cache,
         },
     )
     trace_id = getattr(trace, "id", observability.trace_id())
     logger.info(
         "chat_request_received",
         extra={
-            "query": request.query,
+            "query": req.query,
             "trace_id": trace_id,
         },
     )
 
     service = get_rag_service()
-    response = await service.answer(request, trace=trace)
+    response = await service.answer(req, trace=trace)
     response.trace_id = trace_id
 
     try:

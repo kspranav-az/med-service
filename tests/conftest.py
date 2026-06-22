@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import MagicMock
 
 import numpy as np
@@ -17,6 +18,7 @@ class FakeRedis:
     def __init__(self) -> None:
         self._data: dict[str, str] = {}
         self._locks: set[str] = set()
+        self._counters: dict[str, int] = {}
 
     async def get(self, key: str) -> str | None:
         return self._data.get(key)
@@ -38,6 +40,27 @@ class FakeRedis:
 
     async def delete(self, key: str) -> None:
         self._data.pop(key, None)
+
+    async def script_load(self, script: str) -> str:
+        """Return a deterministic fake SHA for Lua scripts."""
+        import hashlib
+
+        return hashlib.sha256(script.encode("utf-8")).hexdigest()
+
+    async def evalsha(
+        self,
+        sha: str,
+        numkeys: int,
+        key: str,
+        *args: str,
+    ) -> list[Any]:
+        """Emulate a token-bucket script: allow up to ``burst`` requests."""
+        burst = int(args[0]) if args else 1
+        count = self._counters.get(key, 0)
+        if count < burst:
+            self._counters[key] = count + 1
+            return [1, burst - count - 1]
+        return [0, 0]
 
     async def close(self) -> None:
         pass

@@ -4,14 +4,27 @@ from __future__ import annotations
 
 import time
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, Request
 
+from services.autocomplete.service.autocomplete_service import AutocompleteService
 from shared.logging import get_logger
-from shared.models import AutocompleteRequest, AutocompleteResponse, AutocompleteResult
+from shared.models import AutocompleteRequest, AutocompleteResponse
 from shared.observability import observability
+from shared.rate_limit import RateLimiter, RateLimitExceededError
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["autocomplete"])
+
+_autocomplete_service: AutocompleteService | None = None
+_autocomplete_limiter = RateLimiter.for_autocomplete()
+
+
+def _get_service() -> AutocompleteService:
+    """Return the singleton autocomplete service."""
+    global _autocomplete_service
+    if _autocomplete_service is None:
+        _autocomplete_service = AutocompleteService()
+    return _autocomplete_service
 
 
 @router.get("/health")
@@ -21,38 +34,31 @@ async def health() -> dict[str, str]:
 
 
 @router.post("/autocomplete", response_model=AutocompleteResponse)
-async def autocomplete(request: AutocompleteRequest) -> AutocompleteResponse:
-    """Return medical term suggestions for the given prefix.
-
-    This is a stub implementation for Phase 1. The trie + vector + RRF
-    pipeline will be implemented in Phase 4.
-    """
-    start = time.perf_counter()
+async def autocomplete(request: Request, req: AutocompleteRequest) -> AutocompleteResponse:
+    """Return medical term suggestions for the given prefix."""
     trace_id = observability.trace_id()
     logger.info(
         "autocomplete_request_received",
         extra={
-            "query": request.query,
-            "field_types": request.field_types,
+            "query": req.query,
+            "field_types": req.field_types,
             "trace_id": trace_id,
         },
     )
 
-    latency_ms = (time.perf_counter() - start) * 1000
+    identifier = request.client.host if request.client else "anonymous"
+    try:
+        await _autocomplete_limiter.check(identifier)
+    except RateLimitExceededError as exc:
+        raise HTTPException(
+            status_code=429,
+            detail="Rate limit exceeded",
+            headers={"Retry-After": str(exc.retry_after)},
+        ) from exc
 
-    return AutocompleteResponse(
-        query=request.query,
-        field_types=request.field_types,
-        results=[
-            AutocompleteResult(
-                term=request.query,
-                cui=None,
-                tuis=[],
-                aliases=[],
-                match_type="prefix",
-                score=1.0,
-            ),
-        ],
-        latency_ms=latency_ms,
-        cached=False,
-    )
+    start = time.perf_counter()
+    service = _get_service()
+    response = await service.complete(req)
+    response.latency_ms = round((time.perf_counter() - start) * 1000, 2)
+
+    return response

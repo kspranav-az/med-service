@@ -1,37 +1,52 @@
 # MedService Project Context
 
 ## Overview
-MedService is a medical-domain AI toolkit built around a curated corpus of pediatric surgery and urology reference material. The project is organized as a multi-service codebase with shared infrastructure for ingestion, embeddings, and retrieval.
+MedService is a medical-domain AI toolkit built around a curated corpus of pediatric surgery and urology reference material. The project is organized as a multi-service codebase with shared infrastructure for ingestion, embeddings, retrieval, and entity extraction.
 
-Planned services:
-- **RAG Chat Agent** — question-answering over the medical corpus
-- **Autocomplete Service** — domain-aware text completion for clinical notes
-- Additional services may be added under `services/` as the project grows
+Active services:
+- **RAG Chat Agent** — retrieval-augmented question-answering over the medical corpus with citations, hybrid search, two-tier reranking, Redis caching, request deduplication, and Langfuse tracing.
+- **Semantic Autocomplete** — field-aware medical term autocomplete backed by a character-level trie, fuzzy matching, vector similarity over SciSpaCy-extracted entities, Redis caching, and per-IP rate limiting.
+
+Additional services may be added under `services/` as the project grows.
 
 ## Repository Layout
 
 ```
 med-service/
 ├── services/                  # Deployable service modules
-│   ├── rag_chat_agent/        # TBD
-│   ├── autocomplete/          # TBD
-│   └── ...
+│   ├── rag_chat_agent/        # RAG chat API and service logic
+│   └── autocomplete/          # Semantic autocomplete API and service logic
 ├── shared/                    # Libraries shared across services
-│   ├── ingestion/
-│   ├── embeddings/
+│   ├── cache/
 │   ├── chunking/
-│   ├── vector_store/
-│   └── corpus_client.py
-├── data/                      # NOT committed to Git
-│   └── corpus/
-│       ├── manifest.json      # Metadata registry for all sources
-│       └── books/
-│           └── pediatric/     # Domain-specific subfolder
-│               └── *.pdf
-├── scripts/                   # Utility scripts (ingest, rebuild manifest, etc.)
+│   ├── corpus_client.py
+│   ├── dedup/
+│   ├── embeddings/
+│   ├── entities/              # SciSpaCy entity extraction provider
+│   ├── fuzzy/                 # rapidfuzz-based typo tolerance
+│   ├── fusion/                # Reciprocal Rank Fusion utilities
+│   ├── ingestion/
+│   ├── logging.py
+│   ├── models/
+│   ├── rate_limit/            # Redis token-bucket rate limiter
+│   ├── reranker/
+│   └── vector_store/          # Qdrant clients (rag_chunks + entities)
+├── scripts/                   # Utility scripts
+│   ├── extract_entities.py
+│   ├── index_entities.py
+│   ├── ingest_pdfs.py
+│   ├── reindex_all.py
+│   └── reindex_source.py
 ├── notebooks/                 # Exploration notebooks
-├── tests/
+├── tests/                     # Pytest test suite
+├── data/                      # NOT committed to Git
+│   ├── corpus/
+│   │   ├── manifest.json
+│   │   └── books/pediatric/*.pdf
+│   └── processed/
+│       └── entities/scispacy_entities.json
 ├── README.md
+├── PRD.md
 ├── CONTEXT.md                 # This file
 └── AGENTS.md                  # AI-agent specific instructions
 ```
@@ -113,7 +128,7 @@ data/corpus/books/pediatric/
 ### Code Organization
 - Services live under `services/` and should be independently runnable.
 - Shared logic lives under `shared/` and must not depend on a specific service.
-- Each service can have its own `pyproject.toml` / `requirements.txt` and `Dockerfile`.
+- Each service can have its own `Dockerfile`; the root `pyproject.toml` manages all dependencies.
 
 ### Git Rules
 - `data/` is **never** committed to Git.
@@ -121,12 +136,23 @@ data/corpus/books/pediatric/
 - The repository should contain code, configs, scripts, tests, and documentation only.
 
 ## Environment
-A Python virtual environment exists at `.venv/` with `pypdf` installed for PDF processing. Additional dependencies should be added per service or in a root `requirements.txt` / `pyproject.toml`.
+A Python virtual environment exists at `.venv/` managed by `uv`. Install all extras for development:
+
+```bash
+uv sync --extra all --group dev
+```
+
+Qdrant and Redis are run via Docker Compose for local development:
+
+```bash
+docker compose up -d
+```
 
 ## Python Version
-- Currently using Python 3.9 (based on `.venv`).
+- **Python 3.12** (narrowed to `<3.13` because `qdrant-client==1.18.0` pulls incompatible NumPy 2.x on Python 3.13+).
 
 ## Notes for Future Work
 - The corpus is currently pediatric-only. Future domains (e.g., cardiology, radiology, oncology) should follow the same folder + manifest pattern.
-- The RAG and autocomplete services should read from `data/corpus/manifest.json` and resolve PDF paths relative to `data/corpus/`.
+- The RAG and autocomplete services read from `data/corpus/manifest.json` and resolve PDF paths relative to `data/corpus/`.
 - Any ingestion pipeline should handle page-range splits and large PDFs gracefully.
+- Autocomplete currently uses SciSpaCy-extracted entities with internal placeholder TUIs. Phase 5 will replace this with a UMLS-backed provider that exposes true CUIs and all 127 TUIs without changing the API contract.
