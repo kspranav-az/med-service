@@ -120,17 +120,33 @@ class RAGService:
         query: str,
         top_k: int = 20,
         trace: Any | None = None,
+        use_keyword: bool = False,
     ) -> list[dict[str, Any]]:
-        """Retrieve the top-k relevant chunks for a query."""
+        """Retrieve the top-k relevant chunks for a query.""
+
+        Args:
+            query: User query.
+            top_k: Number of chunks to retrieve.
+            trace: Optional Langfuse trace.
+            use_keyword: Whether to fuse dense retrieval with keyword search.
+        """
+
         with observability.trace_span(name="rag_retrieve", trace=trace):
             query_embedding = self.embedder.encode([query], show_progress=False)
+            keyword_query = query if use_keyword else None
             results = self.vector_store.search(
                 query_embedding=query_embedding[0],
                 top_k=top_k,
+                keyword_query=keyword_query,
             )
             logger.info(
                 "retrieved_chunks",
-                extra={"query": query, "top_k": top_k, "results": len(results)},
+                extra={
+                    "query": query,
+                    "top_k": top_k,
+                    "hybrid": use_keyword,
+                    "results": len(results),
+                },
             )
             return results
 
@@ -255,7 +271,12 @@ class RAGService:
                 return response
 
         async def _compute() -> ChatResponse:
-            retrieved = await self.retrieve(request.query, top_k=request.top_k, trace=trace)
+            retrieved = await self.retrieve(
+                request.query,
+                top_k=request.top_k,
+                trace=trace,
+                use_keyword=request.hybrid_search,
+            )
             reranked = await self._rerank(request, retrieved, trace=trace)
             response = await self.generate(request, reranked, trace=trace)
             if request.use_cache:

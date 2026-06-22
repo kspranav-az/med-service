@@ -12,6 +12,7 @@ from qdrant_client.models import (
     Distance,
     FieldCondition,
     Filter,
+    MatchText,
     MatchValue,
     PayloadSchemaType,
     PointIdsList,
@@ -102,6 +103,11 @@ class QdrantVectorStore:
             collection_name=self.collection_name,
             field_name="chunk_index",
             field_schema=PayloadSchemaType.INTEGER,
+        )
+        self.client.create_payload_index(
+            collection_name=self.collection_name,
+            field_name="text",
+            field_schema=PayloadSchemaType.TEXT,
         )
 
         logger.info(
@@ -206,18 +212,82 @@ class QdrantVectorStore:
             points_selector=PointIdsList(points=[_point_id(cid) for cid in chunk_ids]),
         )
 
+    def _ensure_text_index(self) -> None:
+        """Create a full-text payload index on ``text`` if it does not exist."""
+        info = self.client.get_collection(self.collection_name)
+        schema = getattr(info, "payload_schema", {}) or {}
+        if "text" in schema:
+            return
+
+        try:
+            self.client.create_payload_index(
+                collection_name=self.collection_name,
+                field_name="text",
+                field_schema=PayloadSchemaType.TEXT,
+            )
+            logger.info("text_index_created", extra={"collection": self.collection_name})
+        except Exception as exc:  # pragma: no cover
+            logger.warning("text_index_creation_failed", extra={"error": str(exc)})
+
+    def keyword_search(
+        self,
+        query: str,
+        top_k: int = 20,
+        source_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Full-text keyword search over chunk text payloads.
+
+        Args:
+            query: Keyword query.
+            top_k: Maximum number of keyword matches.
+            source_id: Optional source filter.
+
+        Returns:
+            List of result dicts. Scores are set to 0.0 because Qdrant
+            full-text filtering does not return a relevance score; ranks
+            are used for fusion.
+        """
+        self._ensure_text_index()
+
+        conditions: list[Any] = [
+            FieldCondition(key="text", match=MatchText(text=query)),
+        ]
+        if source_id:
+            conditions.append(
+                FieldCondition(key="source_id", match=MatchValue(value=source_id)),
+            )
+
+        response: QueryResponse = self.client.query_points(
+            collection_name=self.collection_name,
+            query_filter=Filter(must=conditions),
+            limit=top_k,
+            with_payload=True,
+        )
+
+        return [
+            {
+                "id": point.id,
+                "score": 0.0,
+                "payload": point.payload,
+            }
+            for point in response.points
+        ]
+
     def search(
         self,
         query_embedding: list[float] | NDArray[Any],
         top_k: int = 20,
         source_id: str | None = None,
+        keyword_query: str | None = None,
     ) -> list[dict[str, Any]]:
-        """Search for nearest chunks.
+        """Search for nearest chunks, optionally fusing with keyword search.
 
         Args:
             query_embedding: Query vector.
             top_k: Number of results.
             source_id: Optional source filter.
+            keyword_query: If provided, run a full-text keyword search and
+                fuse dense + keyword results with reciprocal rank fusion.
 
         Returns:
             List of result dicts with ``id``, ``score``, and ``payload``.
@@ -245,7 +315,7 @@ class QdrantVectorStore:
             with_payload=True,
         )
 
-        return [
+        dense_results = [
             {
                 "id": point.id,
                 "score": point.score,
@@ -254,6 +324,54 @@ class QdrantVectorStore:
             for point in response.points
         ]
 
+        if not keyword_query:
+            return dense_results
+
+        keyword_results = self.keyword_search(
+            query=keyword_query,
+            top_k=top_k,
+            source_id=source_id,
+        )
+
+        return _fuse_results(dense_results, keyword_results, top_k=top_k)
+
     def count(self) -> int:
         """Return the total number of points in the collection."""
         return self.client.count(collection_name=self.collection_name).count
+
+
+def _fuse_results(
+    dense_results: list[dict[str, Any]],
+    keyword_results: list[dict[str, Any]],
+    top_k: int,
+    k: int = 60,
+) -> list[dict[str, Any]]:
+    """Fuse dense and keyword result lists with reciprocal rank fusion.
+
+    Args:
+        dense_results: Dense vector search results.
+        keyword_results: Keyword search results.
+        top_k: Number of fused results to return.
+        k: RRF ranking constant.
+
+    Returns:
+        Fused results sorted by RRF score.
+    """
+    scores: dict[Any, float] = {}
+    items: dict[Any, dict[str, Any]] = {}
+
+    for rank, hit in enumerate(dense_results):
+        key = hit["id"]
+        scores[key] = scores.get(key, 0.0) + 1.0 / (k + rank + 1)
+        items[key] = hit
+
+    for rank, hit in enumerate(keyword_results):
+        key = hit["id"]
+        scores[key] = scores.get(key, 0.0) + 1.0 / (k + rank + 1)
+        items[key] = hit
+
+    sorted_keys = sorted(scores, key=scores.get, reverse=True)  # type: ignore[arg-type]
+    return [
+        {**items[key], "score": round(scores[key], 4)}
+        for key in sorted_keys[:top_k]
+    ]

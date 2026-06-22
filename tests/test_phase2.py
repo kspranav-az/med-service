@@ -14,7 +14,7 @@ from shared.corpus_client import get_source_by_id, resolve_source_path
 from shared.dedup.request_dedup import RequestDeduplicator
 from shared.ingestion import ParserType, get_parser
 from shared.models import ChatRequest, Chunk
-from shared.vector_store.qdrant_store import QdrantVectorStore
+from shared.vector_store.qdrant_store import QdrantVectorStore, _fuse_results
 from tests.conftest import FakeRedis
 
 
@@ -150,6 +150,27 @@ class TestRAGService:
         assert response.confidence_passed is False
 
 
+class TestHybridSearch:
+    """Tests for dense + keyword result fusion."""
+
+    def test_fuse_results_promotes_shared_hits(self) -> None:
+        dense = [
+            {"id": "a", "score": 0.9, "payload": {"text": "alpha"}},
+            {"id": "b", "score": 0.8, "payload": {"text": "beta"}},
+        ]
+        keyword = [
+            {"id": "b", "score": 0.0, "payload": {"text": "beta"}},
+            {"id": "c", "score": 0.0, "payload": {"text": "gamma"}},
+        ]
+
+        fused = _fuse_results(dense, keyword, top_k=3)
+
+        assert len(fused) == 3
+        # Hit present in both lists should rank first after RRF.
+        assert fused[0]["id"] == "b"
+        assert fused[0]["score"] > fused[1]["score"]
+
+
 class TestQdrantStore:
     """Integration tests for Qdrant vector store (require local Qdrant)."""
 
@@ -171,6 +192,9 @@ class TestQdrantStore:
         if store is None:
             pytest.skip("Qdrant not available")
 
+        # Clean up any stale test data from previous interrupted runs.
+        store.delete_by_source("test_source")
+
         chunks = [
             Chunk(
                 chunk_id="test_chunk_00001",
@@ -183,8 +207,46 @@ class TestQdrantStore:
         embeddings = np.array([[1.0] + [0.0] * 767], dtype=np.float32)
         store.upsert_chunks(chunks, embeddings)
 
-        results = store.search(embeddings[0], top_k=1)
+        results = store.search(embeddings[0], top_k=1, source_id="test_source")
         assert len(results) == 1
         assert results[0]["payload"]["source_id"] == "test_source"
 
         store.delete_by_source("test_source")
+
+    def test_keyword_and_hybrid_search(self, store: QdrantVectorStore | None) -> None:
+        if store is None:
+            pytest.skip("Qdrant not available")
+
+        # Clean up any stale test data from previous interrupted runs.
+        store.delete_by_source("test_source_keyword")
+
+        chunks = [
+            Chunk(
+                chunk_id="test_chunk_00002",
+                source_id="test_source_keyword",
+                chunk_index=0,
+                page_number=1,
+                text="diabetes treatment and long term management",
+            )
+        ]
+        embeddings = np.array([[1.0] + [0.0] * 767], dtype=np.float32)
+        store.upsert_chunks(chunks, embeddings)
+
+        keyword_results = store.keyword_search(
+            "diabetes",
+            top_k=5,
+            source_id="test_source_keyword",
+        )
+        assert len(keyword_results) >= 1
+        assert all(r["payload"]["source_id"] == "test_source_keyword" for r in keyword_results)
+
+        hybrid_results = store.search(
+            embeddings[0],
+            top_k=5,
+            keyword_query="diabetes",
+            source_id="test_source_keyword",
+        )
+        assert len(hybrid_results) >= 1
+        assert all(r["payload"]["source_id"] == "test_source_keyword" for r in hybrid_results)
+
+        store.delete_by_source("test_source_keyword")

@@ -93,6 +93,10 @@ class ChatRequest(BaseModel):
         default="minilm",
         description="Reranker tier to use.",
     )
+    hybrid_search: bool = Field(
+        default=True,
+        description="Combine dense vector retrieval with full-text keyword search.",
+    )
     require_citations: bool = Field(default=True, description="Return citations with the answer.")
     confidence_threshold: float = Field(default=0.65, ge=0.0, le=1.0)
     max_tokens: int = Field(default=2048, ge=256, le=8192, description="Maximum LLM output tokens.")

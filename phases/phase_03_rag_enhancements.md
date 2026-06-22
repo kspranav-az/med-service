@@ -89,8 +89,9 @@ Weeks 4–6
 
 ## Status
 
-Items 1 (Hybrid Search), 5 (Conversation History), 8 (RAGAS Evaluation), and 9 (Admin Endpoints)
-are planned for a later iteration. The remaining enhancements have been implemented.
+Items 5 (Conversation History), 8 (RAGAS Evaluation), and 9 (Admin Endpoints)
+are planned for a later iteration. Hybrid search, reranking, caching, deduplication,
+confidence scoring, and Langfuse tracing are implemented.
 
 ## Verification Checklist
 
@@ -99,6 +100,7 @@ are planned for a later iteration. The remaining enhancements have been implemen
 - [x] Redis cache returns results for repeated queries
 - [ ] Reindexing a source invalidates relevant cache entries
 - [x] Simultaneous identical queries trigger only one LLM call
+- [x] Hybrid search combines dense + keyword results via RRF
 - [ ] Conversation history changes answers contextually
 - [ ] RAGAS faithfulness >0.80 on test set
 - [ ] End-to-end P95 latency <3s with Tier 1 reranker
