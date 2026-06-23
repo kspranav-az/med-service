@@ -89,6 +89,17 @@ Weeks 6–7
 - Support `data-entity-types` attribute
 - Wire to `/autocomplete` endpoint
 
+## Status
+
+✅ Completed, except for the frontend autocomplete component (deferred per project decision).
+
+Implementation deviations from the original plan:
+- Built a custom character-level trie (`EntityTrie`) instead of using `pygtrie`.
+- Added `rapidfuzz` for fuzzy matching instead of a raw Levenshtein implementation.
+- Responses expose the actual match source (`prefix`, `fuzzy`, `semantic`) instead of generic `fusion`.
+- The embedding model and trie are preloaded during FastAPI lifespan to avoid first-request latency.
+- Rate limiting was added to `/api/v1/chat` as well, with separate limits.
+
 ## Key Considerations
 
 - **Autocomplete is intentionally a skeleton.** CUIs and real TUIs come in Phase 5.
@@ -98,15 +109,15 @@ Weeks 6–7
 
 ## Verification Checklist
 
-- [ ] `scripts/extract_entities.py` produces a non-empty entity list
-- [ ] Qdrant `entities` collection exists with correct schema
-- [ ] Trie returns prefix matches in <5ms
-- [ ] Fuzzy matching handles typos (e.g., "diabetis" → "diabetes")
-- [ ] `/autocomplete` returns ranked results
-- [ ] Rate limiter blocks requests after 60/min
-- [ ] Redis cache returns repeated queries in <10ms
-- [ ] Frontend input calls `/autocomplete` and displays suggestions
-- [ ] API response schema matches PRD contract (with nullable cui/tuis)
+- [x] `scripts/extract_entities.py` produces a non-empty entity list
+- [x] Qdrant `entities` collection exists with correct schema
+- [x] Trie returns prefix matches in <5ms (after warmup)
+- [x] Fuzzy matching handles typos (e.g., "diabetis" → "diabetes")
+- [x] `/autocomplete` returns ranked results
+- [x] Rate limiter blocks requests after configured limit
+- [x] Redis cache returns repeated queries in <10ms
+- [ ] Frontend input calls `/autocomplete` and displays suggestions (deferred)
+- [x] API response schema matches PRD contract (with nullable cui/tuis)
 
 ## Outputs / Deliverables
 

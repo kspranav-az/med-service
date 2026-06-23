@@ -3,6 +3,10 @@
 ## Goal
 Deploy the system to a cloud VPS with HIPAA-aligned security, monitoring, and reliability.
 
+## Status
+
+⏳ Not started. Depends on Phase 4 (or Phase 5 if UMLS is required before production) and provisioned infrastructure.
+
 ## Duration
 Weeks 8–10
 

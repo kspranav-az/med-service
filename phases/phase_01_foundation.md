@@ -96,16 +96,20 @@ Create `docker-compose.yml` with:
 - **MPS is optional.** Test that CPU fallback works before relying on MPS.
 - **Docker is only for infra.** Do not put preprocessing or embedding workers in Docker yet.
 
+## Status
+
+✅ Completed.
+
 ## Verification Checklist
 
-- [ ] `uv run python --version` returns Python 3.12
-- [ ] `docker compose up` starts Qdrant and Redis successfully
-- [ ] `python -c "from shared.corpus_client import load_manifest; print(len(load_manifest()))"` prints 24
-- [ ] Qdrant is reachable at `http://localhost:6333`
-- [ ] Redis is reachable at `redis://localhost:6379`
-- [ ] `pytest` runs without import errors (even if no tests yet)
-- [ ] `ruff check .` passes on new code
-- [ ] `.gitignore` excludes `data/`, `.venv/`, `.DS_Store`, and local infra volumes
+- [x] `uv run python --version` returns Python 3.12
+- [x] `docker compose up` starts Qdrant and Redis successfully
+- [x] `python -c "from shared.corpus_client import load_manifest; print(len(load_manifest()))"` prints 24
+- [x] Qdrant is reachable at `http://localhost:6333`
+- [x] Redis is reachable at `redis://localhost:6379`
+- [x] `pytest` runs without import errors
+- [x] `ruff check .` passes on new code
+- [x] `.gitignore` excludes `data/`, `.venv/`, `.DS_Store`, and local infra volumes
 
 ## Outputs / Deliverables
 

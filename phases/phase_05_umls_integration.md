@@ -3,6 +3,10 @@
 ## Goal
 Replace SciSpaCy placeholder entities with full UMLS-backed entities: CUIs, all 127 TUIs, and SapBERT embeddings.
 
+## Status
+
+⏳ Not started. Blocked until UMLS license is approved and the Metathesaurus is downloaded.
+
 ## Duration
 After UMLS license approval; estimated 2–3 weeks
 

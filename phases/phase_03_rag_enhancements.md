@@ -89,21 +89,26 @@ Weeks 4–6
 
 ## Status
 
-Items 5 (Conversation History), 8 (RAGAS Evaluation), and 9 (Admin Endpoints)
-are planned for a later iteration. Hybrid search, reranking, caching, deduplication,
-confidence scoring, and Langfuse tracing are implemented.
+Mostly completed. Hybrid search, two-tier reranking, Redis caching, request
+deduplication, confidence scoring, and Langfuse tracing are implemented.
+
+Deferred to a later iteration:
+- Conversation history
+- RAGAS evaluation script + test set
+- Admin endpoints
+- Full source-level cache invalidation on reindex (version bump is implemented)
 
 ## Verification Checklist
 
 - [x] Tier 1 reranker improves ranking over vector-only retrieval
 - [x] Tier 2 reranker selectable via API (`reranker` field)
 - [x] Redis cache returns results for repeated queries
-- [ ] Reindexing a source invalidates relevant cache entries
+- [~] Reindexing a source invalidates relevant cache entries (global version bump implemented; source-level clearing best-effort)
 - [x] Simultaneous identical queries trigger only one LLM call
 - [x] Hybrid search combines dense + keyword results via RRF
 - [ ] Conversation history changes answers contextually
 - [ ] RAGAS faithfulness >0.80 on test set
-- [ ] End-to-end P95 latency <3s with Tier 1 reranker
+- [ ] End-to-end P95 latency <3s with Tier 1 reranker (not benchmarked)
 - [x] Langfuse shows full trace per request
 
 ## Outputs / Deliverables

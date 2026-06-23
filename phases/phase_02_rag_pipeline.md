@@ -91,6 +91,10 @@ Weeks 2–4
 - **Keep LLM prompts citation-strict** from day one to reduce hallucination.
 - **Do not commit embeddings or parsed text.** Store outputs under `data/` which is gitignored.
 
+## Status
+
+✅ Completed. Langfuse tracing spans were fully implemented in Phase 3.
+
 ## Verification Checklist
 
 - [x] All 24 PDFs can be parsed without fatal errors
@@ -99,7 +103,7 @@ Weeks 2–4
 - [x] Reindexing a source updates points correctly (version increments, old points removed)
 - [x] `/chat` returns a grounded answer with citations
 - [x] Citations include source id and page number
-- [ ] Langfuse traces show retrieval + generation spans
+- [x] Langfuse traces show retrieval + generation spans
 - [x] End-to-end latency for a simple query is <10s on local dev
 
 ## Outputs / Deliverables
