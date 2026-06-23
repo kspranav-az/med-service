@@ -93,7 +93,9 @@ class AutocompleteCache:
     ) -> None:
         key = _cache_key(query, field_types, fuzzy, semantic, limit)
         try:
-            await self.client.setex(key, self._ttl, json.dumps(value, default=str))
+            await self.client.set(
+                key, json.dumps(value, default=str), ex=self._ttl
+            )
         except Exception as exc:
             logger.warning("autocomplete_cache_set_failed", extra={"error": str(exc)})
 

@@ -95,12 +95,14 @@ class EntityVectorStore:
         self,
         entities: list[Entity],
         embeddings: NDArray[Any],
+        upsert_batch_size: int = 500,
     ) -> None:
-        """Insert or update entity vectors.
+        """Insert or update entity vectors in batches.
 
         Args:
             entities: Entities to store.
             embeddings: Normalised embedding vectors of shape (n_entities, dimension).
+            upsert_batch_size: Number of points to send per Qdrant upsert request.
         """
         if len(entities) != len(embeddings):
             raise ValueError("entities and embeddings must have the same length")
@@ -122,15 +124,23 @@ class EntityVectorStore:
                 )
             )
 
-        self.client.upsert(
-            collection_name=self.collection_name,
-            points=points,
-            wait=True,
-        )
+        total_upserted = 0
+        for i in range(0, len(points), upsert_batch_size):
+            batch = points[i : i + upsert_batch_size]
+            self.client.upsert(
+                collection_name=self.collection_name,
+                points=batch,
+                wait=True,
+            )
+            total_upserted += len(batch)
 
         logger.info(
             "entities_upserted",
-            extra={"collection": self.collection_name, "count": len(points)},
+            extra={
+                "collection": self.collection_name,
+                "count": total_upserted,
+                "batches": (len(points) + upsert_batch_size - 1) // upsert_batch_size,
+            },
         )
 
     def search(

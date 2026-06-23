@@ -100,7 +100,9 @@ class SemanticCache:
         """Store a response dict with TTL."""
         key = self._key(query, model, reranker, rerank_top_k)
         try:
-            await self.client.setex(key, self._ttl, json.dumps(value, default=str))
+            await self.client.set(
+                key, json.dumps(value, default=str), ex=self._ttl
+            )
         except Exception as exc:
             logger.warning("cache_set_failed", extra={"error": str(exc)})
 
