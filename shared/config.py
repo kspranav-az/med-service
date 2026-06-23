@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     environment: str = Field(default="development", alias="ENVIRONMENT")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
 
+    # CORS (dev-only; restrict in production)
+    cors_origins: str = Field(default="http://localhost:5173", alias="CORS_ORIGINS")
+
     # Paths
     project_root: Path = Field(default_factory=lambda: Path(__file__).resolve().parents[1])
     corpus_root: Path = Field(

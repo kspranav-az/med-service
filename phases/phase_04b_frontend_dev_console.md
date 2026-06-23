@@ -144,14 +144,14 @@ npm run dev
 
 ## Verification Checklist
 
-- [ ] `npm install` completes without errors
-- [ ] `npm run dev` starts the console on `http://localhost:5173`
-- [ ] CORS middleware allows requests from `http://localhost:5173`
-- [ ] Chat tab sends a query and displays an answer with citations
-- [ ] Autocomplete tab shows suggestions as the user types
-- [ ] Health tab reports both services as reachable
-- [ ] Build passes (`npm run build`)
-- [ ] Root `README.md` includes frontend setup steps
+- [x] `npm install` completes without errors
+- [x] `npm run dev` starts the console on `http://localhost:5173`
+- [x] CORS middleware allows requests from `http://localhost:5173`
+- [x] Chat tab sends a query and displays an answer with citations
+- [x] Autocomplete tab shows suggestions as the user types
+- [x] Health tab reports both services as reachable
+- [x] Build passes (`npm run build`)
+- [x] Root `README.md` includes frontend setup steps
 
 ## Outputs / Deliverables
 

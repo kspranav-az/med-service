@@ -6,6 +6,7 @@ MedService is a medical-domain AI toolkit built around a curated corpus of pedia
 Active services:
 - **RAG Chat Agent** — retrieval-augmented question-answering over the medical corpus with citations, hybrid search, two-tier reranking, Redis caching, request deduplication, and Langfuse tracing.
 - **Semantic Autocomplete** — field-aware medical term autocomplete backed by a character-level trie, fuzzy matching, vector similarity over SciSpaCy-extracted entities, Redis caching, and per-IP rate limiting.
+- **Dev Console** — a React + Vite + TypeScript + Tailwind frontend under `frontend/` for testing all backend services from the browser.
 
 Additional services may be added under `services/` as the project grows.
 
@@ -39,6 +40,7 @@ med-service/
 │   └── reindex_source.py
 ├── notebooks/                 # Exploration notebooks
 ├── tests/                     # Pytest test suite
+├── frontend/                  # React + Vite + TS + Tailwind dev console
 ├── data/                      # NOT committed to Git
 │   ├── corpus/
 │   │   ├── manifest.json

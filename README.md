@@ -118,6 +118,30 @@ curl -X POST http://localhost:8001/api/v1/autocomplete \
   -d '{"query":"myo","field_types":"T047,T191","limit":10,"fuzzy":true,"semantic_expansion":true}'
 ```
 
+### 8. Run the dev console (frontend)
+
+A React + Vite + TypeScript + Tailwind dev console is available under `frontend/` for testing both services from the browser.
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The console runs at `http://localhost:5173` and expects the backend services on their default ports (`8000` and `8001`).
+To use custom URLs, copy the example environment file and edit it:
+
+```bash
+cp frontend/.env.example frontend/.env
+# Update VITE_CHAT_API_URL and VITE_AUTOCOMPLETE_API_URL if needed
+```
+
+The console has three tabs:
+
+- **Chat** — submit RAG questions with model, reranker, and cache overrides.
+- **Autocomplete** — live debounced medical term suggestions with match-source badges.
+- **Health** — verify that both backend services are reachable.
+
 ## Rate Limits
 
 Both endpoints use Redis token-bucket rate limiters with separate limits per IP:
