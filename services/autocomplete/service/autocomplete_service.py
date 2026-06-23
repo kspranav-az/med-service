@@ -35,6 +35,11 @@ def _normalise_field_types(field_types: str | list[str]) -> list[str]:
     return field_types
 
 
+def _entity_key(entity: Entity) -> str:
+    """Return a hashable key for an entity based on name and TUIs."""
+    return f"{entity.name.lower()}:{','.join(sorted(entity.tuis or []))}"
+
+
 def _cache_key(query: str, field_types: list[str], fuzzy: bool, semantic: bool, limit: int) -> str:
     payload = "|".join([
         " ".join(query.lower().split()),
@@ -201,6 +206,7 @@ class AutocompleteService:
         self,
         fused: list[tuple[Entity, float]],
         limit: int,
+        source_map: dict[str, str],
     ) -> list[AutocompleteResult]:
         """Convert fused entities to AutocompleteResult objects."""
         max_score = fused[0][1] if fused else 1.0
@@ -210,7 +216,7 @@ class AutocompleteService:
                 cui=entity.cui,
                 tuis=entity.tuis,
                 aliases=entity.aliases,
-                match_type="fusion",
+                match_type=source_map.get(_entity_key(entity), "fusion"),  # type: ignore[arg-type]
                 score=round(min(score / max_score, 1.0), 4) if max_score else 0.0,
             )
             for entity, score in fused[:limit]
@@ -264,18 +270,18 @@ class AutocompleteService:
 
         start_time = __import__("time").time()
 
-        result_lists: list[list[Entity]] = []
+        source_lists: list[tuple[str, list[Entity]]] = []
 
         prefix_results = self._trie.prefix_search(query, limit=limit * 2)
         if prefix_results:
-            result_lists.append(prefix_results)
+            source_lists.append(("prefix", prefix_results))
 
         if fuzzy and self._fuzzy is not None:
             fuzzy_hits: list[tuple[Entity, float]] = self._fuzzy.search(
                 query, limit=limit * 2, score_cutoff=75
             )
             if fuzzy_hits:
-                result_lists.append([entity for entity, _score in fuzzy_hits])
+                source_lists.append(("fuzzy", [entity for entity, _score in fuzzy_hits]))
 
         if semantic:
             semantic_results = await self._semantic_search(
@@ -284,9 +290,9 @@ class AutocompleteService:
                 field_types=field_types,
             )
             if semantic_results:
-                result_lists.append(semantic_results)
+                source_lists.append(("semantic", semantic_results))
 
-        if not result_lists:
+        if not source_lists:
             return AutocompleteResponse(
                 query=query,
                 field_types=request.field_types,
@@ -294,13 +300,19 @@ class AutocompleteService:
                 latency_ms=0.0,
             )
 
+        result_lists = [entities for _source, entities in source_lists]
+        source_map: dict[str, str] = {}
+        for source, entities in source_lists:
+            for entity in entities:
+                source_map.setdefault(_entity_key(entity), source)
+
         fused = reciprocal_rank_fusion(
             result_lists,
-            key_func=lambda e: f"{e.name.lower()}:{','.join(sorted(e.tuis or []))}",
+            key_func=_entity_key,
             top_k=limit * 2,
         )
         filtered = self._filter_by_type(fused, field_types)
-        results = self._to_results(filtered, limit)
+        results = self._to_results(filtered, limit, source_map)
 
         latency_ms = round((__import__("time").time() - start_time) * 1000, 2)
 
