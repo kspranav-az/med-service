@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from services.autocomplete.api.routes import router
+from services.autocomplete.api.routes import _get_service, router
 from shared.config import settings
 from shared.logging import configure_logging, get_logger
 
@@ -25,6 +26,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             "redis_url": settings.redis_url,
         },
     )
+    # Build the trie and load the embedding model before accepting traffic.
+    await asyncio.to_thread(_get_service)
+    logger.info("autocomplete_index_warmed")
     yield
     logger.info("autocomplete_shutdown")
 
