@@ -26,7 +26,10 @@ class Settings(BaseSettings):
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
 
     # CORS (dev-only; restrict in production)
-    cors_origins: str = Field(default="http://localhost:5173", alias="CORS_ORIGINS")
+    cors_origins: str = Field(
+        default="http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173",
+        alias="CORS_ORIGINS",
+    )
 
     # Paths
     project_root: Path = Field(default_factory=lambda: Path(__file__).resolve().parents[1])
