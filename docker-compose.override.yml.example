@@ -1,0 +1,22 @@
+# Example Docker Compose override for deploying MedService on a server
+# that already runs another project on the default Qdrant/Redis ports.
+#
+# Copy this file to docker-compose.override.yml and adjust ports as needed:
+#   cp docker-compose.override.yml.example docker-compose.override.yml
+#
+# Start the isolated stack with:
+#   docker compose -p med-service up -d
+
+services:
+  qdrant:
+    ports:
+      - "7333:6333"
+      - "7334:6334"
+    volumes:
+      - ./qdrant_storage:/qdrant/storage
+
+  redis:
+    ports:
+      - "7380:6379"
+    volumes:
+      - ./redis_data:/data

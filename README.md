@@ -118,7 +118,11 @@ curl -X POST http://localhost:8001/api/v1/autocomplete \
   -d '{"query":"myo","field_types":"T047,T191","limit":10,"fuzzy":true,"semantic_expansion":true}'
 ```
 
-### 8. Run the dev console (frontend)
+## Deployment
+
+See [`DEPLOYMENT.md`](DEPLOYMENT.md) for deploying to a server, including co-hosting with another project on the same machine without reindexing the corpus.
+
+### Run the dev console (frontend)
 
 A React + Vite + TypeScript + Tailwind dev console is available under `frontend/` for testing both services from the browser.
 
