@@ -148,20 +148,33 @@ git commit -m "update med-service submodule"
 
 ### MedService Docker files
 
-MedService now includes:
+MedService now includes a **single-container, CPU-only inference image**:
 
-- `Dockerfile` — builds the inference image (chat + autocomplete).
-- `docker-compose.med-service.yml` — standalone stack with Qdrant + Redis + both services.
-- `.dockerignore` — excludes data, frontend build, caches, etc.
+- `Dockerfile` — one container running both chat and autocomplete via `supervisord`.
+- `supervisord.conf` — keeps both uvicorn processes alive.
+- `docker-compose.med-service.yml` — Qdrant + Redis + one MedService container.
+- `.dockerignore` — excludes data, frontend build, caches, secrets.
 
-You can build the image standalone:
+`pyproject.toml` pins `torch` to the CPU-only wheel on Linux, so the Docker image does not pull in CUDA libraries.
+
+Build it standalone:
 
 ```bash
 cd med-service
 docker build -t med-service-inference .
 ```
 
-The image is large (several GB) because it bundles PyTorch, transformers, sentence-transformers, and spaCy/SciSpaCy.
+Expected image size after CPU-only torch: **~1.2–1.8 GB** (down from 3–4 GB).
+
+### Why a single container on one 4-core server
+
+For a single small server, one container is more resource-efficient than two because:
+
+- The embedding model and PyTorch libraries are loaded **once**, not twice.
+- Shared memory usage is lower.
+- A 4-core CPU is enough for occasional concurrent chat/autocomplete requests.
+
+The trade-off is less isolation between the two services.
 
 ### Run from Nori-Tura’s compose
 
@@ -179,56 +192,32 @@ services:
     image: redis:7-alpine
     container_name: med-service-redis
 
-  med-chat:
+  med-service:
     build: ./med-service
-    container_name: med-service-chat
-    command:
-      - uv
-      - run
-      - uvicorn
-      - services.rag_chat_agent.api.main:app
-      - --host
-      - 0.0.0.0
-      - --port
-      - "8000"
+    container_name: med-service
     env_file: ./med-service/.env
     environment:
       QDRANT_URL: http://med-qdrant:6333
       REDIS_URL: redis://med-redis:6379/0
     volumes:
       - ./med-service/data:/app/data:ro
+      - med-cache:/app/.cache
     depends_on:
       - med-qdrant
       - med-redis
+    ports:
+      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:8001:8001"
 
-  med-autocomplete:
-    build: ./med-service
-    container_name: med-service-autocomplete
-    command:
-      - uv
-      - run
-      - uvicorn
-      - services.autocomplete.api.main:app
-      - --host
-      - 0.0.0.0
-      - --port
-      - "8001"
-    env_file: ./med-service/.env
-    environment:
-      QDRANT_URL: http://med-qdrant:6333
-      REDIS_URL: redis://med-redis:6379/0
-    volumes:
-      - ./med-service/data:/app/data:ro
-    depends_on:
-      - med-qdrant
-      - med-redis
+volumes:
+  med-cache:
 ```
 
 Then in `Nori-Tura/backend/.env`:
 
 ```bash
-RAG_DIAGNOSIS_URL=http://med-chat:8000/api/v1/chat
-RAG_CONSENT_URL=http://med-chat:8000/api/v1/chat
+RAG_DIAGNOSIS_URL=http://med-service:8000/api/v1/chat
+RAG_CONSENT_URL=http://med-service:8000/api/v1/chat
 RAG_API_KEY=your-shared-secret
 ```
 

@@ -81,6 +81,16 @@ dev = [
 [tool.uv]
 package = true
 
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-cpu", marker = "sys_platform == 'linux'" },
+]
+
 [tool.setuptools.packages.find]
 include = ["shared*", "services*", "scripts*", "tests*"]
 exclude = ["data*", "phases*", "notebooks*", "qdrant_storage*", "redis_data*"]
