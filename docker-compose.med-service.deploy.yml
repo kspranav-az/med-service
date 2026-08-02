@@ -91,11 +91,13 @@ services:
       - "traefik.http.routers.med-chat.rule=Host(`med.primeworld.tech`)"
       - "traefik.http.routers.med-chat.entrypoints=websecure"
       - "traefik.http.routers.med-chat.tls.certresolver=myresolver"
+      - "traefik.http.routers.med-chat.service=med-chat"
       - "traefik.http.services.med-chat.loadbalancer.server.port=8100"
       # Autocomplete API on med-api.primeworld.tech
       - "traefik.http.routers.med-autocomplete.rule=Host(`med-api.primeworld.tech`)"
       - "traefik.http.routers.med-autocomplete.entrypoints=websecure"
       - "traefik.http.routers.med-autocomplete.tls.certresolver=myresolver"
+      - "traefik.http.routers.med-autocomplete.service=med-autocomplete"
       - "traefik.http.services.med-autocomplete.loadbalancer.server.port=8101"
 
       # ── Option B: single subdomain with path prefixes ──
@@ -103,10 +105,12 @@ services:
       # - "traefik.http.routers.med-chat.rule=Host(`med.primeworld.tech`) && PathPrefix(`/chat`)"
       # - "traefik.http.routers.med-chat.entrypoints=websecure"
       # - "traefik.http.routers.med-chat.tls.certresolver=myresolver"
+      # - "traefik.http.routers.med-chat.service=med-chat"
       # - "traefik.http.services.med-chat.loadbalancer.server.port=8100"
       # - "traefik.http.routers.med-autocomplete.rule=Host(`med.primeworld.tech`) && PathPrefix(`/autocomplete`)"
       # - "traefik.http.routers.med-autocomplete.entrypoints=websecure"
       # - "traefik.http.routers.med-autocomplete.tls.certresolver=myresolver"
+      # - "traefik.http.routers.med-autocomplete.service=med-autocomplete"
       # - "traefik.http.services.med-autocomplete.loadbalancer.server.port=8101"
       # NOTE: the frontend must then call https://med.primeworld.tech/chat/api/v1/chat
       # and https://med.primeworld.tech/autocomplete/api/v1/autocomplete.
