@@ -190,8 +190,15 @@ class LLMClient:
             logger.error("anthropic_completion_failed", extra={"error": str(exc)})
             raise
 
+        text = ""
+        if response.content:
+            for block in response.content:
+                if getattr(block, "type", None) == "text":
+                    text = block.text or ""
+                    break
+
         return LLMResponse(
-            text=response.content[0].text if response.content else "",
+            text=text,
             model=model,
             input_tokens=response.usage.input_tokens if response.usage else 0,
             output_tokens=response.usage.output_tokens if response.usage else 0,

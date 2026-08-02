@@ -32,13 +32,14 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
     && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy application code.
-COPY . .
-
 # Install the SciSpaCy NER model used by autocomplete.
 # This model is too large to list as a normal dependency, so it is installed explicitly.
+# Installed before copying application code so small code changes don't invalidate this layer.
 RUN uv pip install \
     https://s3-us-west-2.amazonaws.com/ai2-s2-scispacy/releases/v0.5.4/en_core_sci_lg-0.5.4.tar.gz
+
+# Copy application code.
+COPY . .
 
 ENV PYTHONPATH=/app \
     HF_HOME=/app/.cache/huggingface \
