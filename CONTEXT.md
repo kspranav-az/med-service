@@ -193,6 +193,10 @@ cp frontend/.env.example frontend/.env
 
 Both FastAPI services use `CORSMiddleware` plus custom exception handlers so that error responses also include CORS headers. Allowed origins are controlled by the `CORS_ORIGINS` environment variable (comma-separated). The default includes common Vite dev origins; production deployments must set this to the real frontend origin(s).
 
+## API Reference
+
+See [`API.md`](API.md) for the deployed endpoint URLs, request/response schemas, and example curls for both the RAG Chat Agent and Semantic Autocomplete services.
+
 ## Deployment
 
 See [`DEPLOYMENT.md`](DEPLOYMENT.md) for server deployment instructions, including:
