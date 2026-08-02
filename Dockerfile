@@ -45,7 +45,8 @@ ENV PYTHONPATH=/app \
     HF_HOME=/app/.cache/huggingface \
     SENTENCE_TRANSFORMERS_HOME=/app/.cache/sentence_transformers
 
-# Both services listen inside the container.
-EXPOSE 8000 8001
+# Both services listen inside the container on non-default ports to avoid
+# collisions with other containers on shared Docker networks.
+EXPOSE 8100 8101
 
 CMD ["/usr/bin/supervisord", "-c", "/app/supervisord.conf"]

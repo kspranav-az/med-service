@@ -197,8 +197,10 @@ Both FastAPI services use `CORSMiddleware` plus custom exception handlers so tha
 
 See [`DEPLOYMENT.md`](DEPLOYMENT.md) for server deployment instructions, including:
 
+- deploying on the shared Prime World CRM VPS via Traefik (`docker-compose.med-service.deploy.yml`),
 - copying Qdrant storage and entity data without reindexing,
 - port planning for shared servers,
+- subdomain vs path-based routing trade-offs,
 - systemd and Nginx examples,
 - integration with an existing Traefik or Nginx reverse proxy.
 

@@ -1,0 +1,121 @@
+# MedService production deployment on the shared Prime World CRM VPS.
+#
+# This compose file is designed to run alongside the existing Prime World CRM
+# stack, re-using its Traefik reverse proxy for HTTPS termination. It does NOT
+# publish any host ports for Qdrant, Redis, or the MedService APIs; Traefik is
+# the only public entry point.
+#
+# Prerequisites on the server:
+#   1. Prime World CRM is running with Traefik on the external network
+#      "prime-world-crm_prime-network".
+#   2. The MedService repo (or a pre-built image) is present on the server.
+#   3. ./data and ./qdrant_storage have been copied from the local machine.
+#   4. A .env file exists with LLM keys and CORS_ORIGINS.
+#
+# Usage:
+#   docker compose -f docker-compose.med-service.deploy.yml up -d --build
+#
+# Routing (default: separate subdomains):
+#   med.primeworld.tech      -> med-service:8100 (RAG chat)
+#   med-api.primeworld.tech  -> med-service:8101 (autocomplete)
+#
+# To use path-based routing on one subdomain instead, comment out the default
+# labels and uncomment the "PathPrefix" block below.
+
+services:
+  med-qdrant:
+    image: qdrant/qdrant:v1.18.0
+    container_name: med-service-qdrant
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.6'
+          memory: 1G
+    volumes:
+      - ./qdrant_storage:/qdrant/storage
+    environment:
+      QDRANT__SERVICE__HTTP_PORT: 6333
+    networks:
+      - med-network
+    # No published ports — only reachable inside this compose network.
+
+  med-redis:
+    image: redis:7-alpine
+    container_name: med-service-redis
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 256M
+    networks:
+      - med-network
+    # No published ports — only reachable inside this compose network.
+
+  med-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: med-service
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Internal service discovery via the compose network.
+      QDRANT_URL: http://med-qdrant:6333
+      REDIS_URL: redis://med-redis:6379/0
+      # Force production logging/cors behavior.
+      ENVIRONMENT: production
+    volumes:
+      # Read-only corpus + processed entities.
+      - ./data:/app/data:ro
+      # Hugging Face / sentence-transformers caches (survives restarts).
+      - med-cache:/app/.cache
+    depends_on:
+      - med-qdrant
+      - med-redis
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 2G
+    networks:
+      - med-network
+      - prime-world-crm_prime-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=prime-world-crm_prime-network"
+
+      # ── Option A: separate subdomains (recommended) ──
+      # Chat API on med.primeworld.tech
+      - "traefik.http.routers.med-chat.rule=Host(`med.primeworld.tech`)"
+      - "traefik.http.routers.med-chat.entrypoints=websecure"
+      - "traefik.http.routers.med-chat.tls.certresolver=myresolver"
+      - "traefik.http.services.med-chat.loadbalancer.server.port=8100"
+      # Autocomplete API on med-api.primeworld.tech
+      - "traefik.http.routers.med-autocomplete.rule=Host(`med-api.primeworld.tech`)"
+      - "traefik.http.routers.med-autocomplete.entrypoints=websecure"
+      - "traefik.http.routers.med-autocomplete.tls.certresolver=myresolver"
+      - "traefik.http.services.med-autocomplete.loadbalancer.server.port=8101"
+
+      # ── Option B: single subdomain with path prefixes ──
+      # Uncomment the block below and comment out Option A to use one host.
+      # - "traefik.http.routers.med-chat.rule=Host(`med.primeworld.tech`) && PathPrefix(`/chat`)"
+      # - "traefik.http.routers.med-chat.entrypoints=websecure"
+      # - "traefik.http.routers.med-chat.tls.certresolver=myresolver"
+      # - "traefik.http.services.med-chat.loadbalancer.server.port=8100"
+      # - "traefik.http.routers.med-autocomplete.rule=Host(`med.primeworld.tech`) && PathPrefix(`/autocomplete`)"
+      # - "traefik.http.routers.med-autocomplete.entrypoints=websecure"
+      # - "traefik.http.routers.med-autocomplete.tls.certresolver=myresolver"
+      # - "traefik.http.services.med-autocomplete.loadbalancer.server.port=8101"
+      # NOTE: the frontend must then call https://med.primeworld.tech/chat/api/v1/chat
+      # and https://med.primeworld.tech/autocomplete/api/v1/autocomplete.
+
+volumes:
+  med-cache:
+
+networks:
+  med-network:
+    driver: bridge
+  prime-world-crm_prime-network:
+    external: true

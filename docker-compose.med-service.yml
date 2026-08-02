@@ -36,11 +36,13 @@ services:
       - med-qdrant
       - med-redis
     restart: unless-stopped
-    # These ports are only exposed to the host. On a shared server, bind to
-    # localhost or remove the host ports and route through the existing reverse proxy.
+    # The container listens on 8100/8101 internally. We still expose the
+    # familiar 8000/8001 on localhost for local development so the frontend
+    # defaults keep working. On a shared server, remove these host ports and
+    # route through the existing reverse proxy (see docker-compose.med-service.deploy.yml).
     ports:
-      - "127.0.0.1:8000:8000"
-      - "127.0.0.1:8001:8001"
+      - "127.0.0.1:8000:8100"
+      - "127.0.0.1:8001:8101"
 
 volumes:
   med-cache:

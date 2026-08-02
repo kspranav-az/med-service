@@ -6,6 +6,131 @@ No application code changes are required. All configuration is done through envi
 
 ---
 
+## Deploying on the Prime World CRM VPS (recommended)
+
+The current server already runs Prime World CRM and Nori-Tura, both routed through the same Traefik reverse proxy on the Docker network `prime-world-crm_prime-network`. MedService can be added to this same server with **no port conflicts** and **no extra reverse proxy** by connecting its container to that network and letting Traefik terminate HTTPS.
+
+### Architecture
+
+- **Dedicated Qdrant + Redis inside MedService's own compose stack.** They have no published host ports, so they cannot conflict with Prime World CRM's Redis/Qdrant.
+- **Single MedService inference container** hosting both RAG chat (internal port `8100`) and autocomplete (internal port `8101`). This keeps memory and CPU overhead low on a 4-core VPS and avoids port `8000`, which is already used by Nori-Tura's API container.
+- **Traefik routes by hostname** (or hostname+path) to the appropriate internal port.
+- **Data is mounted from the host** — `data/` (read-only) and `qdrant_storage/` — so no reindexing is needed.
+
+### Routing options
+
+| Approach | Example URL for chat | Example URL for autocomplete | Recommendation |
+|---|---|---|---|
+| **Separate subdomains** | `https://med.primeworld.tech/api/v1/chat` | `https://med-api.primeworld.tech/api/v1/autocomplete` | **Recommended** — clean, no path rewriting, easy CORS |
+| Single subdomain + path prefixes | `https://med.primeworld.tech/chat/api/v1/chat` | `https://med.primeworld.tech/autocomplete/api/v1/autocomplete` | Possible, but frontend URLs must include the prefix |
+
+The default `docker-compose.med-service.deploy.yml` uses **separate subdomains**.
+
+### DNS records required
+
+For the default subdomain option, add these A records pointing to the server IP:
+
+```
+med.primeworld.tech     A <server-ip>
+med-api.primeworld.tech A <server-ip>
+```
+
+Traefik will automatically request Let's Encrypt certificates for both.
+
+### Compose file
+
+Use `docker-compose.med-service.deploy.yml` (in this repo). It:
+
+- Defines `med-qdrant` and `med-redis` with **no host ports**.
+- Builds/runs the single `med-service` container.
+- Attaches `med-service` to the external `prime-world-crm_prime-network` so Traefik can reach it.
+- Adds Traefik labels for HTTPS routing.
+- Sets CPU/memory limits suitable for a 4-core VPS:
+  - `med-qdrant`: 0.6 CPU / 1 GB
+  - `med-redis`: 0.2 CPU / 256 MB
+  - `med-service`: 1.5 CPU / 2 GB
+  - **Total MedService limit: ~2.3 CPU / ~3.25 GB**
+
+### Steps
+
+1. **Copy data to the server** (from your local machine):
+
+   ```bash
+   # Stop local Qdrant first so the storage files are consistent.
+   docker compose stop qdrant
+
+   rsync -avz --delete qdrant_storage/ \
+     kavi@srv1496320:~/client_projects/med-service/qdrant_storage/
+
+   rsync -avz --progress \
+     data/processed/entities/scispacy_entities.json \
+     kavi@srv1496320:~/client_projects/med-service/data/processed/entities/
+
+   docker compose start qdrant
+   ```
+
+2. **Create the production `.env`** on the server:
+
+   ```bash
+   ssh kavi@srv1496320
+   cd ~/client_projects/med-service
+   cp .env.example .env
+   # edit .env
+   ```
+
+   Required values:
+
+   ```bash
+   ENVIRONMENT=production
+   LOG_LEVEL=INFO
+
+   # Internal compose service names (already set in docker-compose.med-service.deploy.yml)
+   QDRANT_URL=http://med-qdrant:6333
+   REDIS_URL=redis://med-redis:6379/0
+
+   # Allowed frontend origins — set to the deployed frontend domain(s)
+   CORS_ORIGINS=https://med.primeworld.tech,https://med-api.primeworld.tech
+
+   # LLM provider for Kimi Code
+   ANTHROPIC_API_KEY=sk-...
+   ANTHROPIC_BASE_URL=https://api.kimi.com/coding/
+   DEFAULT_LLM_MODEL=claude-sonnet-4-20250514
+   ```
+
+3. **Start the stack**:
+
+   ```bash
+   docker compose -f docker-compose.med-service.deploy.yml up -d --build
+   ```
+
+4. **Verify**:
+
+   ```bash
+   # Inside the Traefik network
+   curl https://med.primeworld.tech/api/v1/health
+   curl -X POST https://med-api.primeworld.tech/api/v1/autocomplete \
+     -H 'Content-Type: application/json' \
+     -d '{"query":"myo","limit":5}'
+   ```
+
+### Why not piggyback on Prime World's Redis/Qdrant?
+
+You could, but it is **not recommended**:
+
+- Prime World's Redis requires password authentication (`redis_pass`). MedService currently uses an unauthenticated Redis URL format.
+- Prime World's Qdrant would need a separate collection namespace to avoid collisions.
+- Running dedicated containers isolates MedService failures and makes the stack portable.
+
+The resource overhead of a dedicated Qdrant + Redis is small compared to the MedService container itself.
+
+### Why a separate subdomain is better than a path under `primeworld.tech`
+
+- Traefik can route by hostname to the correct internal port without any URL rewriting.
+- The FastAPI services see their real root path (`/`), so generated docs, OpenAPI schemas, and CORS `Origin` headers stay simple.
+- You can later move MedService to its own server by just updating DNS, without touching Prime World's routing.
+
+---
+
 ## Shared-server considerations
 
 The default ports used by this project are common defaults that may conflict with another project on the same server:
@@ -26,20 +151,22 @@ To deploy alongside another project, move these to unused ports and isolate the 
 
 The other project already binds several ports. The conflict analysis against MedService defaults is:
 
-| Other project port | Used by | MedService default | Conflict? | MedService alternate |
+| Other project port | Used by | MedService default | Conflict? | MedService solution |
 |---|---|---|---|---|
-| `80` / `443` | Traefik / Nginx public entrypoint | none | **Yes — cannot run a second reverse proxy** | Route through existing Traefik/Nginx |
+| `80` / `443` | Traefik / Nginx public entrypoint | none | **Yes — cannot run a second reverse proxy** | Route through existing Traefik |
 | `8080` | Traefik dashboard | none | No | Avoid `8080` |
 | `5432` | PostgreSQL | none | No | — |
-| `6379` | Redis | `6379` | **Yes** | `7380` |
+| `6379` | Redis | `6379` | **Yes if published** | Do not publish MedService Redis |
 | `9000` / `9001` | MinIO | none | No | — |
 | `3000` | NestJS API | none | No | — |
 | `3001` | NestJS worker | none | No | — |
-| `6333` / `6334` | — | Qdrant | No (free) | Keep or use `7333`/`7334` |
-| `8000` | — | Chat API | No (free) | Keep or use `8002` |
-| `8001` | — | Autocomplete API | No (free) | Keep or use `8003` |
+| `6333` / `6334` | — | Qdrant | No if not published | Do not publish MedService Qdrant |
+| `8000` | Nori-Tura API | Chat API (was `8000`) | **Yes — Nori-Tura uses `8000` internally** | Container now uses `8100` internally |
+| `8001` | — | Autocomplete API (was `8001`) | No if not published | Container now uses `8101` internally |
 
 **Key point:** because `80` and `443` are already occupied, you cannot run another Nginx/Traefik for MedService on the same IP. You must route MedService through the **existing** reverse proxy.
+
+The recommended approach is `docker-compose.med-service.deploy.yml`, which keeps all MedService ports internal and exposes only via Traefik labels. This avoids every conflict above without needing alternate host ports.
 
 ### Option 1: the other project uses Traefik (`docker-compose.yml`)
 
@@ -51,25 +178,25 @@ Example `docker-compose.med-service.yml`:
 services:
   med-chat:
     build: .
-    command: uv run uvicorn services.rag_chat_agent.api.main:app --host 0.0.0.0 --port 8000
+    command: uv run uvicorn services.rag_chat_agent.api.main:app --host 0.0.0.0 --port 8100
     env_file: .env
     networks:
       - prime-network
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.med-chat.rule=Host(`chat-api.yourdomain.com`)"
-      - "traefik.http.services.med-chat.loadbalancer.server.port=8000"
+      - "traefik.http.services.med-chat.loadbalancer.server.port=8100"
 
   med-autocomplete:
     build: .
-    command: uv run uvicorn services.autocomplete.api.main:app --host 0.0.0.0 --port 8001
+    command: uv run uvicorn services.autocomplete.api.main:app --host 0.0.0.0 --port 8101
     env_file: .env
     networks:
       - prime-network
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.med-autocomplete.rule=Host(`autocomplete-api.yourdomain.com`)"
-      - "traefik.http.services.med-autocomplete.loadbalancer.server.port=8001"
+      - "traefik.http.services.med-autocomplete.loadbalancer.server.port=8101"
 
   med-console:
     build: ./frontend
@@ -206,8 +333,8 @@ services:
       - med-qdrant
       - med-redis
     ports:
-      - "127.0.0.1:8000:8000"
-      - "127.0.0.1:8001:8001"
+      - "127.0.0.1:8100:8100"
+      - "127.0.0.1:8101:8101"
 
 volumes:
   med-cache:
@@ -216,8 +343,8 @@ volumes:
 Then in `Nori-Tura/backend/.env`:
 
 ```bash
-RAG_DIAGNOSIS_URL=http://med-service:8000/api/v1/chat
-RAG_CONSENT_URL=http://med-service:8000/api/v1/chat
+RAG_DIAGNOSIS_URL=http://med-service:8100/api/v1/chat
+RAG_CONSENT_URL=http://med-service:8100/api/v1/chat
 RAG_API_KEY=your-shared-secret
 ```
 
@@ -245,8 +372,8 @@ CORS_ORIGINS=http://localhost:3000,http://localhost:8080
 | Qdrant HTTP | `7333` |
 | Qdrant gRPC | `7334` |
 | Redis | `7380` |
-| RAG Chat Agent | `8002` |
-| Semantic Autocomplete | `8003` |
+| RAG Chat Agent | `8100` |
+| Semantic Autocomplete | `8101` |
 
 You can choose any free ports. The examples below use the values above.
 
@@ -344,7 +471,7 @@ After=network.target docker.service
 Type=simple
 User=medservice
 WorkingDirectory=/opt/med-service
-ExecStart=/usr/local/bin/uv run uvicorn services.rag_chat_agent.api.main:app --host 127.0.0.1 --port 8002
+ExecStart=/usr/local/bin/uv run uvicorn services.rag_chat_agent.api.main:app --host 127.0.0.1 --port 8100
 Restart=on-failure
 
 [Install]
@@ -362,7 +489,7 @@ After=network.target docker.service
 Type=simple
 User=medservice
 WorkingDirectory=/opt/med-service
-ExecStart=/usr/local/bin/uv run uvicorn services.autocomplete.api.main:app --host 127.0.0.1 --port 8003
+ExecStart=/usr/local/bin/uv run uvicorn services.autocomplete.api.main:app --host 127.0.0.1 --port 8101
 Restart=on-failure
 
 [Install]
@@ -430,7 +557,7 @@ server {
     ssl_certificate_key /etc/letsencrypt/live/chat-api.yourdomain.com/privkey.pem;
 
     location / {
-        proxy_pass http://127.0.0.1:8002;
+        proxy_pass http://127.0.0.1:8100;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -446,7 +573,7 @@ server {
     ssl_certificate_key /etc/letsencrypt/live/autocomplete-api.yourdomain.com/privkey.pem;
 
     location / {
-        proxy_pass http://127.0.0.1:8003;
+        proxy_pass http://127.0.0.1:8101;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -469,7 +596,7 @@ server {
 
     location /chat/ {
         rewrite ^/chat/(.*)$ /$1 break;
-        proxy_pass http://127.0.0.1:8002;
+        proxy_pass http://127.0.0.1:8100;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -478,7 +605,7 @@ server {
 
     location /autocomplete/ {
         rewrite ^/autocomplete/(.*)$ /$1 break;
-        proxy_pass http://127.0.0.1:8003;
+        proxy_pass http://127.0.0.1:8101;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -499,7 +626,7 @@ VITE_AUTOCOMPLETE_API_URL=https://api.yourdomain.com/autocomplete
 ## Security notes for shared servers
 
 - Do not expose Qdrant or Redis ports to the public internet. They should only listen on `localhost` or inside the Docker network.
-- Use a firewall to block external access to `7333`, `7334`, `7380`, `8002`, and `8003`.
+- Use a firewall to block external access to `7333`, `7334`, `7380`, `8100`, and `8101`.
 - Keep `.env` permissions strict: `chmod 600 .env`.
 - Use HTTPS for the frontend and API subdomains.
 - Set `CORS_ORIGINS` to exactly your frontend domain. Do not use a wildcard with credentials enabled.
@@ -514,11 +641,11 @@ curl http://localhost:7333/collections
 curl http://localhost:7380 ping
 
 # Service health
-curl http://localhost:8002/api/v1/health
-curl http://localhost:8003/api/v1/health
+curl http://localhost:8100/api/v1/health
+curl http://localhost:8101/api/v1/health
 
 # Autocomplete smoke test
-curl -X POST http://localhost:8003/api/v1/autocomplete \
+curl -X POST http://localhost:8101/api/v1/autocomplete \
   -H 'Content-Type: application/json' \
   -d '{"query":"myo","limit":5}'
 ```
