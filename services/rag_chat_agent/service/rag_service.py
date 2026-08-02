@@ -56,6 +56,9 @@ def _extract_citations(text: str) -> list[tuple[str, int]]:
     - [source_id, NUMBER] (fallback if the model omits "page")
     - Multiple citations separated by semicolons inside one bracket pair.
     """
+    if not text:
+        return []
+
     results: list[tuple[str, int]] = []
     # Match bracket groups that may contain semicolon-separated citations.
     bracket_pattern = re.compile(r"\[([^\]]+?)\]")
@@ -212,6 +215,18 @@ class RAGService:
                 logger.error("llm_generation_failed", extra={"error": str(exc)})
                 return ChatResponse(
                     answer="An error occurred while generating the answer.",
+                    citations=[],
+                    confidence=0.0,
+                    confidence_passed=False,
+                    trace_id=observability.trace_id(),
+                    reranker_used=request.reranker,
+                    cached=False,
+                )
+
+            if not llm_response.text:
+                logger.warning("llm_returned_empty_answer")
+                return ChatResponse(
+                    answer="The model returned an empty answer.",
                     citations=[],
                     confidence=0.0,
                     confidence_passed=False,
