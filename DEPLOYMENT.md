@@ -112,6 +112,143 @@ If you prefer to keep MedService services on the host (no containers), use the a
 
 ---
 
+## Dockerized inference + Nori-Tura submodule
+
+If you want MedService to live inside the Nori-Tura repo, the cleanest approach is:
+
+1. Add MedService as a **git submodule**.
+2. Build a Docker image for MedService inference only.
+3. Run MedService containers from Nori-Tura’s Docker Compose.
+4. Point Nori-Tura’s existing `RAG_DIAGNOSIS_URL` / `RAG_CONSENT_URL` at the MedService containers.
+
+### Why a submodule + Docker works
+
+- **No Python version conflict.** The MedService image uses Python 3.12; Nori-Tura stays on 3.11.
+- **No dependency conflict.** Heavy ML/vector libraries live only inside the MedService image.
+- **No code merge.** MedService remains a standalone repo; Nori-Tura only adds a submodule reference and a few Compose service definitions.
+- **Endpoint-only integration.** Nori-Tura’s existing RAG config fields are designed exactly for this.
+
+### Add MedService as a submodule in Nori-Tura
+
+```bash
+cd Nori-Tura
+git submodule add https://github.com/your-org/med-service.git med-service
+git submodule update --init
+```
+
+This creates `.gitmodules` and pins MedService to a specific commit. To update later:
+
+```bash
+cd med-service
+git pull origin main
+cd ..
+git add med-service
+git commit -m "update med-service submodule"
+```
+
+### MedService Docker files
+
+MedService now includes:
+
+- `Dockerfile` — builds the inference image (chat + autocomplete).
+- `docker-compose.med-service.yml` — standalone stack with Qdrant + Redis + both services.
+- `.dockerignore` — excludes data, frontend build, caches, etc.
+
+You can build the image standalone:
+
+```bash
+cd med-service
+docker build -t med-service-inference .
+```
+
+The image is large (several GB) because it bundles PyTorch, transformers, sentence-transformers, and spaCy/SciSpaCy.
+
+### Run from Nori-Tura’s compose
+
+Add this to `Nori-Tura/backend/docker-compose.yml` (or a separate `docker-compose.med-service.yml` in Nori-Tura):
+
+```yaml
+services:
+  med-qdrant:
+    image: qdrant/qdrant:v1.18.0
+    container_name: med-service-qdrant
+    volumes:
+      - ./med-service/qdrant_storage:/qdrant/storage
+
+  med-redis:
+    image: redis:7-alpine
+    container_name: med-service-redis
+
+  med-chat:
+    build: ./med-service
+    container_name: med-service-chat
+    command:
+      - uv
+      - run
+      - uvicorn
+      - services.rag_chat_agent.api.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+    env_file: ./med-service/.env
+    environment:
+      QDRANT_URL: http://med-qdrant:6333
+      REDIS_URL: redis://med-redis:6379/0
+    volumes:
+      - ./med-service/data:/app/data:ro
+    depends_on:
+      - med-qdrant
+      - med-redis
+
+  med-autocomplete:
+    build: ./med-service
+    container_name: med-service-autocomplete
+    command:
+      - uv
+      - run
+      - uvicorn
+      - services.autocomplete.api.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8001"
+    env_file: ./med-service/.env
+    environment:
+      QDRANT_URL: http://med-qdrant:6333
+      REDIS_URL: redis://med-redis:6379/0
+    volumes:
+      - ./med-service/data:/app/data:ro
+    depends_on:
+      - med-qdrant
+      - med-redis
+```
+
+Then in `Nori-Tura/backend/.env`:
+
+```bash
+RAG_DIAGNOSIS_URL=http://med-chat:8000/api/v1/chat
+RAG_CONSENT_URL=http://med-chat:8000/api/v1/chat
+RAG_API_KEY=your-shared-secret
+```
+
+And in `med-service/.env`:
+
+```bash
+CORS_ORIGINS=http://localhost:3000,http://localhost:8080
+# plus LLM keys, Qdrant/Redis URLs, etc.
+```
+
+> **Response-shape mismatch:** MedService `/chat` returns `answer`, `citations`, `confidence`, etc. Nori-Tura’s `rag_service.py` expects `context` for diagnosis and specific consent keys. You will need a small adapter — either a thin wrapper endpoint in MedService or a parser update in Nori-Tura.
+
+### Important notes
+
+- `data/` and `qdrant_storage/` are **not** in the submodule. You must copy them onto the server and mount them as volumes.
+- Do not commit secrets. Both `.env` files should be in `.gitignore`.
+- The submodule approach is only convenient if MedService is actively maintained as a separate repo. If you plan to heavily customize it for Nori-Tura, forking or copying the code may be simpler long-term.
+
+---
+
 ## Recommended alternate ports
 
 | Service | Suggested alternate port |

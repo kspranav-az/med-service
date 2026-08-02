@@ -1,0 +1,74 @@
+# Standalone Docker Compose for MedService inference.
+#
+# Usage:
+#   docker compose -f docker-compose.med-service.yml up -d
+#
+# This stack runs Qdrant + Redis + the two FastAPI services.
+# Mount your pre-built data/ and qdrant_storage/ directories from the host.
+# Set CORS_ORIGINS and LLM keys in a .env file before starting.
+
+services:
+  med-qdrant:
+    image: qdrant/qdrant:v1.18.0
+    container_name: med-service-qdrant
+    volumes:
+      - ./qdrant_storage:/qdrant/storage
+    environment:
+      - QDRANT__SERVICE__HTTP_PORT=6333
+    restart: unless-stopped
+
+  med-redis:
+    image: redis:7-alpine
+    container_name: med-service-redis
+    restart: unless-stopped
+
+  med-chat:
+    build: .
+    container_name: med-service-chat
+    command:
+      - uv
+      - run
+      - uvicorn
+      - services.rag_chat_agent.api.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+    env_file: .env
+    environment:
+      QDRANT_URL: http://med-qdrant:6333
+      REDIS_URL: redis://med-redis:6379/0
+    volumes:
+      - ./data:/app/data:ro
+    depends_on:
+      - med-qdrant
+      - med-redis
+    restart: unless-stopped
+    # Do not publish the port publicly if a reverse proxy handles routing.
+    # ports:
+    #   - "8000:8000"
+
+  med-autocomplete:
+    build: .
+    container_name: med-service-autocomplete
+    command:
+      - uv
+      - run
+      - uvicorn
+      - services.autocomplete.api.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8001"
+    env_file: .env
+    environment:
+      QDRANT_URL: http://med-qdrant:6333
+      REDIS_URL: redis://med-redis:6379/0
+    volumes:
+      - ./data:/app/data:ro
+    depends_on:
+      - med-qdrant
+      - med-redis
+    restart: unless-stopped
+    # ports:
+    #   - "8001:8001"
