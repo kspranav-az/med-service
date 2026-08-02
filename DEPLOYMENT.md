@@ -48,8 +48,10 @@ Use `docker-compose.med-service.deploy.yml` (in this repo). It:
 - Sets CPU/memory limits suitable for a 4-core VPS:
   - `med-qdrant`: 0.6 CPU / 1 GB
   - `med-redis`: 0.2 CPU / 256 MB
-  - `med-service`: 1.5 CPU / 2 GB
-  - **Total MedService limit: ~2.3 CPU / ~3.25 GB**
+  - `med-service`: 1.5 CPU / 4 GB
+  - **Total MedService limit: ~2.3 CPU / ~5.25 GB**
+
+> **Memory note:** `med-service` needs 4 GB because both uvicorn processes run in one container and the autocomplete process loads the large SciSpaCy `en_core_sci_lg` model. If you see `SIGKILL` in the logs, the container is OOMing — do not lower this limit.
 
 ### Steps
 

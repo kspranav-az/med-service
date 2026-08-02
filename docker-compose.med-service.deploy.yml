@@ -11,6 +11,7 @@
 #   2. The MedService repo (or a pre-built image) is present on the server.
 #   3. ./data and ./qdrant_storage have been copied from the local machine.
 #   4. A .env file exists with LLM keys and CORS_ORIGINS.
+#   5. The server has at least ~6 GB of RAM available for this stack.
 #
 # Usage:
 #   docker compose -f docker-compose.med-service.deploy.yml up -d --build
@@ -78,7 +79,8 @@ services:
       resources:
         limits:
           cpus: '1.5'
-          memory: 2G
+          # 2 GB is not enough for both uvicorn processes + the SciSpaCy model.
+          memory: 4G
     networks:
       - med-network
       - prime-world-crm_prime-network
