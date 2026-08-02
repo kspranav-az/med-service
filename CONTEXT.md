@@ -1,9 +1,11 @@
 # MedService Project Context
 
 ## Overview
+
 MedService is a medical-domain AI toolkit built around a curated corpus of pediatric surgery and urology reference material. The project is organized as a multi-service codebase with shared infrastructure for ingestion, embeddings, retrieval, and entity extraction.
 
 Active services:
+
 - **RAG Chat Agent** — retrieval-augmented question-answering over the medical corpus with citations, hybrid search, two-tier reranking, Redis caching, request deduplication, and Langfuse tracing.
 - **Semantic Autocomplete** — field-aware medical term autocomplete backed by a character-level trie, fuzzy matching, vector similarity over SciSpaCy-extracted entities, Redis caching, and per-IP rate limiting.
 - **Dev Console** — a React + Vite + TypeScript + Tailwind frontend under `frontend/` for testing all backend services from the browser.
@@ -21,6 +23,7 @@ med-service/
 │   ├── cache/
 │   ├── chunking/
 │   ├── corpus_client.py
+│   ├── cors.py                # CORS helpers for error responses
 │   ├── dedup/
 │   ├── embeddings/
 │   ├── entities/              # SciSpaCy entity extraction provider
@@ -38,17 +41,20 @@ med-service/
 │   ├── ingest_pdfs.py
 │   ├── reindex_all.py
 │   └── reindex_source.py
+├── frontend/                  # React + Vite + TS + Tailwind dev console
 ├── notebooks/                 # Exploration notebooks
 ├── tests/                     # Pytest test suite
-├── frontend/                  # React + Vite + TS + Tailwind dev console
 ├── data/                      # NOT committed to Git
 │   ├── corpus/
 │   │   ├── manifest.json
 │   │   └── books/pediatric/*.pdf
 │   └── processed/
 │       └── entities/scispacy_entities.json
+├── docker-compose.yml         # Local Qdrant + Redis
+├── docker-compose.override.yml.example  # Alternate ports for shared servers
 ├── README.md
 ├── PRD.md
+├── DEPLOYMENT.md              # Deployment guide
 ├── CONTEXT.md                 # This file
 └── AGENTS.md                  # AI-agent specific instructions
 ```
@@ -56,17 +62,21 @@ med-service/
 ## Data Corpus
 
 ### Location
+
 All source material lives in:
+
 ```
 data/corpus/books/<domain>/
 ```
 
 Currently all books are pediatric-focused:
+
 ```
 data/corpus/books/pediatric/
 ```
 
 ### Manifest
+
 `data/corpus/manifest.json` is the source of truth for the corpus. Each entry has:
 
 ```json
@@ -82,12 +92,14 @@ data/corpus/books/pediatric/
 ```
 
 ### Current Stats
+
 - **Books:** 24
 - **Pages:** 19,714
 - **Domain:** pediatric
 - **Largest source:** Campbell-Walsh Urology (split into 4 parts, 4,899 pages total)
 
 ### Full Book List
+
 | File | Title | Pages | Domain |
 |------|-------|-------|--------|
 | `arm_holschneider_2.pdf` | ARM Holschneider (2nd ed.) | 477 | pediatric |
@@ -118,26 +130,31 @@ data/corpus/books/pediatric/
 ## Conventions
 
 ### File Naming
+
 - All PDFs use `snake_case`.
 - No spaces, brackets, or special characters in filenames.
 - Split books are named `<title>_part_<N>.pdf`.
 
 ### Domain Organization
+
 - Books are grouped under `data/corpus/books/<domain>/`.
 - The manifest must reflect the actual path with `path` and `domain` fields.
 - When adding a new domain, create a new folder and update the manifest.
 
 ### Code Organization
+
 - Services live under `services/` and should be independently runnable.
 - Shared logic lives under `shared/` and must not depend on a specific service.
 - Each service can have its own `Dockerfile`; the root `pyproject.toml` manages all dependencies.
 
 ### Git Rules
+
 - `data/` is **never** committed to Git.
 - `manifest.json` is also kept outside Git by project decision.
 - The repository should contain code, configs, scripts, tests, and documentation only.
 
 ## Environment
+
 A Python virtual environment exists at `.venv/` managed by `uv`. Install all extras for development:
 
 ```bash
@@ -151,9 +168,42 @@ docker compose up -d
 ```
 
 ## Python Version
+
 - **Python 3.12** (narrowed to `<3.13` because `qdrant-client==1.18.0` pulls incompatible NumPy 2.x on Python 3.13+).
 
+## Frontend Dev Console
+
+A browser-based testing UI lives in `frontend/`. It communicates with the running backend services.
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The console opens at `http://localhost:5173` and expects the chat service on `http://localhost:8000` and the autocomplete service on `http://localhost:8001`.
+
+To use custom URLs, copy the example file and edit it before running the dev server:
+
+```bash
+cp frontend/.env.example frontend/.env
+```
+
+## CORS
+
+Both FastAPI services use `CORSMiddleware` plus custom exception handlers so that error responses also include CORS headers. Allowed origins are controlled by the `CORS_ORIGINS` environment variable (comma-separated). The default includes common Vite dev origins; production deployments must set this to the real frontend origin(s).
+
+## Deployment
+
+See [`DEPLOYMENT.md`](DEPLOYMENT.md) for server deployment instructions, including:
+
+- copying Qdrant storage and entity data without reindexing,
+- port planning for shared servers,
+- systemd and Nginx examples,
+- integration with an existing Traefik or Nginx reverse proxy.
+
 ## Notes for Future Work
+
 - The corpus is currently pediatric-only. Future domains (e.g., cardiology, radiology, oncology) should follow the same folder + manifest pattern.
 - The RAG and autocomplete services read from `data/corpus/manifest.json` and resolve PDF paths relative to `data/corpus/`.
 - Any ingestion pipeline should handle page-range splits and large PDFs gracefully.
