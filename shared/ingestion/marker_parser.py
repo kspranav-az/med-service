@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any
 
 from shared.ingestion.base import Page, PDFParser
+from shared.ingestion.text_cleaner import TextCleaner
 from shared.logging import get_logger
+from shared.models import Source
 
 logger = get_logger(__name__)
 
@@ -34,7 +35,7 @@ class MarkerPDFParser(PDFParser):
     books where table/equation/layout quality matters.
     """
 
-    def __init__(self, source: Any, disable_image_extraction: bool = True) -> None:
+    def __init__(self, source: Source, disable_image_extraction: bool = True) -> None:
         """Initialise the Marker parser.
 
         Args:
@@ -43,6 +44,7 @@ class MarkerPDFParser(PDFParser):
         """
         super().__init__(source)
         self.disable_image_extraction = disable_image_extraction
+        self._cleaner = TextCleaner()
 
         if not _MARKER_AVAILABLE:
             raise ImportError("marker-pdf is not installed. Run: uv sync --extra all --group dev")
@@ -72,6 +74,7 @@ class MarkerPDFParser(PDFParser):
         rendered = converter(str(pdf_path))
         full_text, _, _ = text_from_rendered(rendered)
 
+        self._cleaner.reset()
         pages = self._split_by_pages(full_text)
         logger.info(
             "marker_parsed",
@@ -93,13 +96,16 @@ class MarkerPDFParser(PDFParser):
 
         if not matches:
             # No pagination markers found; return the whole text as page 1.
-            return [
-                Page(
-                    source_id=self.source.source_id,
-                    page_number=1,
-                    text=text.strip(),
-                )
-            ]
+            cleaned = self._cleaner.clean(text)
+            if cleaned:
+                return [
+                    Page(
+                        source_id=self.source.source_id,
+                        page_number=1,
+                        text=cleaned,
+                    )
+                ]
+            return []
 
         pages: list[Page] = []
         for i, match in enumerate(matches):
@@ -107,12 +113,13 @@ class MarkerPDFParser(PDFParser):
             start = match.end()
             end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
             page_text = text[start:end].strip()
-            if page_text:
+            cleaned = self._cleaner.clean_page(page_text)
+            if cleaned:
                 pages.append(
                     Page(
                         source_id=self.source.source_id,
                         page_number=page_number,
-                        text=page_text,
+                        text=cleaned,
                     )
                 )
 

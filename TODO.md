@@ -1,6 +1,6 @@
 # MedService TODO
 
-## 1. Fix PDF text preprocessing: dehyphenation + newline normalization (HIGH PRIORITY)
+## 1. Fix PDF text preprocessing: dehyphenation + newline normalization (HIGH PRIORITY — IN PROGRESS)
 
 **Reason:**
 The current `PyMuPDFParser` extracts text page-by-page without cleaning line breaks. This creates two major data-quality issues that propagate into chunks, entities, autocomplete, and retrieval:
@@ -13,13 +13,20 @@ Stats from `data/processed/entities/scispacy_entities.json`:
 - Entities with hyphens: 44,300
 - Entities with literal newlines: 13,529
 
-**Scope:**
-- Add a `TextCleaner` utility in `shared/ingestion/` (or a preprocessing pipeline step) that:
-  - Dehyphenates within and across pages (`-\n` → ``, `- \n` → ` `)
-  - Normalizes newlines within paragraphs to spaces
-  - Optionally strips headers/footers and page numbers
-- Apply it before chunking and entity extraction.
-- Re-run `ingest_pdfs.py` → `extract_entities.py` → `index_entities.py` → `reindex_all.py`.
+**Implementation:**
+- Added `shared/ingestion/text_cleaner.py` with `TextCleaner`.
+- Applied it in `PyMuPDFParser` and `MarkerPDFParser`.
+- Handles intra-page and cross-page hyphenation, newline normalization, and paragraph-break preservation.
+- Tests in `tests/test_text_cleaner.py`.
+
+**Remaining step:**
+Re-run the full preprocessing pipeline to regenerate `qdrant_storage/` and `data/processed/entities/scispacy_entities.json`.
+
+**Long-running command:**
+
+```bash
+uv run extract-entities && uv run reindex-all --parser pymupdf --batch-size 32 --restart
+```
 
 **Impact:**
 Cleaner autocomplete, better chunk quality, improved RAG retrieval, and smaller entity index.
