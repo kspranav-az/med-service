@@ -1,6 +1,6 @@
 # MedService TODO
 
-## 1. Fix PDF text preprocessing, sanitization, and entity noise filtering (HIGH PRIORITY — IN PROGRESS)
+## 1. Fix PDF text preprocessing, sanitization, and entity noise filtering ✅
 
 **Reason:**
 The current `PyMuPDFParser` extracts text page-by-page without cleaning line breaks. This creates two major data-quality issues that propagate into chunks, entities, autocomplete, and retrieval:
@@ -14,20 +14,17 @@ The current `PyMuPDFParser` extracts text page-by-page without cleaning line bre
 - Added `shared/ingestion/text_cleaner.py` with `TextCleaner`.
 - Applied it in `PyMuPDFParser` and `MarkerPDFParser`.
 - Handles intra-page and cross-page hyphenation, newline normalization, paragraph-break preservation, and Unicode artifact removal.
-- Added `_is_noise_entity()` filter in `shared/entities/entity_provider.py` for authors, URLs, citations, headers/footers, numeric-only strings, and corrupted tokens.
+- Added `_is_noise_entity()` filter in `shared/entities/entity_provider.py` for authors, URLs, citations, headers/footers, numeric-only strings, corrupted tokens, trailing punctuation/dashes, page/figure references, possessive book titles, and typographic ligatures.
 - Tests in `tests/test_text_cleaner.py` and `tests/test_entity_provider_filtering.py`.
 
-**Remaining step:**
-Re-run entity extraction and indexing to regenerate `data/processed/entities/scispacy_entities.json` and the `entities` Qdrant collection.
+**Result:**
+- `data/processed/entities/scispacy_entities.json`: **458,157 → 339,317 entities** (~26% reduction).
+- Qdrant `entities` collection rebuilt with **339,317 points**.
+- Redis autocomplete cache (`ac:*`) flushed after rebuild.
+- Full test suite passes: `uv run pytest` → **102 passed**.
 
-**Long-running command:**
-
-```bash
-uv run extract-entities && uv run index-entities
-```
-
-**Impact:**
-Cleaner autocomplete, better chunk quality, improved RAG retrieval, and smaller entity index.
+**Verification:**
+- Direct service test and HTTP endpoint test for `cord`, `lap`, `hernia`, `repair`, etc. no longer return corrupted glyphs or numbered/page fragments.
 
 ---
 
