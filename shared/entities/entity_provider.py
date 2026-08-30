@@ -40,11 +40,26 @@ _AUTHOR_PART_PATTERN = re.compile(
     # mistaken for surnames.
     r"^(?:(?:[Dd]e|[Vv]an|[Vv]on)\s+)?[A-Z][a-zA-Z']+"
     # Optional initials, e.g. "AB", "A-B".
-    r"(?:\s+[A-Z](?:[A-Z]?|-[A-Z]))?"
+    r"(?:\s+[A-Z](?:[A-Z]{0,3}|-[A-Z]))?"
     # Optional "Jr" suffix.
     r"(?:\s+Jr\.?)?$"
 )
 _AUTHOR_COMMA_PATTERN = re.compile(r",\s*[A-Z]")
+_AUTHOR_PERIOD_TEXT_PATTERN = re.compile(
+    # Author citation followed by the start of a caption, e.g.
+    # "Smith LH Jr. L-glyceric aciduria".
+    r"^[A-Z][a-zA-Z']+(?:\s+[A-Z](?:[A-Z]{0,3}|-[A-Z]))?(?:\s+Jr\.?)?\.\s+[A-Za-z]"
+)
+_PAGE_REF_PATTERN = re.compile(r",\s*\d")
+_POSSESSIVE_BOOK_PATTERN = re.compile(
+    # Possessive author + book/procedure word, e.g. "Smith's Anesthesia" or
+    # "Smith's Operative Surgery".
+    r"^[A-Z][a-zA-Z']+(?:'s|’s)\s+"
+    r"(anesthesia|anaesthesia|surgery|operative|textbook|classification|classifieation|technique)"
+    r"\b",
+    re.IGNORECASE,
+)
+_AMPERSAND_PATTERN = re.compile(r"\s+&\s+")
 _URL_EMAIL_PATTERN = re.compile(r"https?://|www\.|@[\w.-]+\.")
 _REFERENCE_PATTERN = re.compile(r"\b(\d{4};\d+(:\d+)?-\d+|et\s+al|doi:|pmid:|ISBN|ISSN)\b")
 _HEADER_FOOTER_WORDS = {
@@ -143,6 +158,23 @@ def _is_noise_entity(name: str) -> bool:
     # Author names like "Smith AB", "Smith, AB", "de Vries PA",
     # "Templeton JH Jr", or "Wallner SJ, Reusche E".
     if _looks_like_author(name):
+        return True
+
+    # Captions that begin with an author citation, e.g.
+    # "Smith LH Jr. L-glyceric aciduria".
+    if _AUTHOR_PERIOD_TEXT_PATTERN.match(name):
+        return True
+
+    # Page references such as "Smith,77".
+    if _PAGE_REF_PATTERN.search(name):
+        return True
+
+    # Possessive author + book/procedure title, e.g. "Smith's Anesthesia".
+    if _POSSESSIVE_BOOK_PATTERN.match(name):
+        return True
+
+    # Company names / author pairs such as "Smith & Nephew".
+    if _AMPERSAND_PATTERN.search(name):
         return True
 
     # Header/footer/book metadata words.

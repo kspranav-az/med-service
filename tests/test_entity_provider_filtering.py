@@ -24,6 +24,12 @@ from shared.entities.entity_provider import _is_noise_entity
         ("de Vries PA", True),
         ("Templeton JH Jr", True),
         ("Wallner SJ, Reusche E", True),
+        ("Smith DAJ", True),
+        ("Smith,77", True),
+        ("Smith LH Jr. L-glyceric aciduria", True),
+        ("Smith's Anesthesia", True),
+        ("Smith's Operative Surgery", True),
+        ("Smith & Nephew", True),
         ("www.example.com", True),
         ("foo@bar.com", True),
         ("1984;19:1181-5", True),
@@ -42,6 +48,8 @@ from shared.entities.entity_provider import _is_noise_entity
         ("Hirschsprung disease", False),
         ("S1–S4", False),
         ("X-ray", False),
+        ("Smith-Lemli-Opitz syndrome", False),
+        ("Down's syndrome", False),
     ],
 )
 def test_is_noise_entity(name: str, expected_noise: bool) -> None:
