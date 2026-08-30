@@ -96,6 +96,7 @@ class EntityVectorStore:
         entities: list[Entity],
         embeddings: NDArray[Any],
         upsert_batch_size: int = 500,
+        wait: bool = True,
     ) -> None:
         """Insert or update entity vectors in batches.
 
@@ -103,6 +104,8 @@ class EntityVectorStore:
             entities: Entities to store.
             embeddings: Normalised embedding vectors of shape (n_entities, dimension).
             upsert_batch_size: Number of points to send per Qdrant upsert request.
+            wait: Whether to wait for each batch to be persisted. Use ``False``
+                for large bulk inserts to avoid client timeouts.
         """
         if len(entities) != len(embeddings):
             raise ValueError("entities and embeddings must have the same length")
@@ -130,7 +133,7 @@ class EntityVectorStore:
             self.client.upsert(
                 collection_name=self.collection_name,
                 points=batch,
-                wait=True,
+                wait=wait,
             )
             total_upserted += len(batch)
 

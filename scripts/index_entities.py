@@ -64,7 +64,7 @@ def main(entity_file: Path | str | None = None) -> None:
 
     store = EntityVectorStore()
     store.ensure_collection(dimension=embedder.dimension)
-    store.upsert_entities(entities, embeddings)
+    store.upsert_entities(entities, embeddings, wait=False)
 
     logger.info(
         "entities_indexed",

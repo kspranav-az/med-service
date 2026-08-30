@@ -90,7 +90,7 @@ def index_source(
     store.ensure_collection(dimension=embedder.dimension)
     store.delete_by_source(source.source_id)
     version = load_next_version(source.source_id)
-    store.upsert_chunks(chunks, embeddings, version=version)
+    store.upsert_chunks(chunks, embeddings, version=version, wait=False)
 
     logger.info(
         "index_source_complete",
