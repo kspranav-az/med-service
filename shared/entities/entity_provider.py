@@ -63,6 +63,9 @@ _AMPERSAND_PATTERN = re.compile(r"\s+&\s+")
 _NUMBERED_REF_PATTERN = re.compile(r"\.\d+$")
 _SINGLE_WORD_POSSESSIVE_PATTERN = re.compile(r"^[a-zA-Z]+['’]s$")
 _TRAILING_INITIAL_PATTERN = re.compile(r"\s+[A-Z]$")
+_TRAILING_DIGIT_LABEL_PATTERN = re.compile(r"\s+\d+$")
+_LOWERCASE_WORD_DIGIT_PATTERN = re.compile(r"[a-z]{3,}\d+$")
+_LIGATURE_PATTERN = re.compile(r"[\ufb00-\ufb06]")
 _URL_EMAIL_PATTERN = re.compile(r"https?://|www\.|@[\w.-]+\.")
 _REFERENCE_PATTERN = re.compile(r"\b(\d{4};\d+(:\d+)?-\d+|et\s+al|doi:|pmid:|ISBN|ISSN)\b")
 _HEADER_FOOTER_WORDS = {
@@ -184,6 +187,19 @@ def _is_noise_entity(name: str) -> bool:
     if _SINGLE_WORD_POSSESSIVE_PATTERN.match(name):
         return True
 
+    # Numbered labels such as "cancer 1" or "hernia 2".
+    if _TRAILING_DIGIT_LABEL_PATTERN.search(name):
+        return True
+
+    # Lowercase word with appended digits, e.g. "bladder7", "kidney4".
+    if _LOWERCASE_WORD_DIGIT_PATTERN.search(name):
+        return True
+
+    # Typographic ligatures (fi, fl, ff, etc.) are PDF artifacts.
+    if _LIGATURE_PATTERN.search(name):
+        return True
+
+    # Header/footer/book metadata words.
     # Figure/table labels such as "bladder A".
     if _TRAILING_INITIAL_PATTERN.search(name):
         return True
