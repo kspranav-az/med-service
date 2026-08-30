@@ -8,6 +8,8 @@ protocol.
 
 from __future__ import annotations
 
+import re
+import unicodedata
 from collections.abc import Iterable
 from typing import Any, Protocol, runtime_checkable
 
@@ -27,10 +29,90 @@ except ImportError:  # pragma: no cover
 
 DEFAULT_SCISPACY_MODEL = "en_core_sci_md"
 
+# Patterns used to filter obviously noisy entities extracted from PDFs.
+_AUTHOR_PATTERN = re.compile(r"^[A-Z][a-zA-Z'-]+ [A-Z]([A-Z]?)(-[A-Z])?$")
+_URL_EMAIL_PATTERN = re.compile(r"https?://|www\.|@[\w.-]+\.")
+_REFERENCE_PATTERN = re.compile(r"\b(\d{4};\d+(:\d+)?-\d+|et\s+al|doi:|pmid:|ISBN|ISSN)\b")
+_HEADER_FOOTER_WORDS = {
+    "introduction",
+    "conclusion",
+    "references",
+    "index",
+    "contents",
+    "table of contents",
+    "abstract",
+    "summary",
+    "acknowledgements",
+    "copyright",
+    "springer",
+    "elsevier",
+    "wiley",
+    "lippincott",
+    "saunders",
+    "chapter",
+    "page",
+    "figure",
+    "fig",
+    "table",
+    "volume",
+    "part",
+}
+
 
 def _label_to_tui(label: str) -> str:
     """Map a SciSpaCy entity label to a temporary internal TUI."""
     return f"TUI-{label.upper()}"
+
+
+def _is_noise_entity(name: str) -> bool:
+    """Return True if ``name`` is clearly not a useful medical term.
+
+    Filters out author names, URLs, citations, headers/footers, and
+    fragments that are too short, too long, numeric, or mostly punctuation.
+    """
+    if not name:
+        return True
+
+    # Too short or too long.
+    if len(name) < 3 or len(name) > 150:
+        return True
+
+    # Numeric-only strings are not useful medical terms.
+    if re.fullmatch(r"\d+", name.strip()):
+        return True
+
+    # Mostly non-word characters.
+    alphanumeric = sum(1 for c in name if c.isalnum() or c.isspace())
+    if alphanumeric == 0 or alphanumeric / len(name) < 0.5:
+        return True
+
+    # Left-over PDF artifacts (control chars, format chars, private-use glyphs,
+    # replacement characters) mean the entity is corrupted.
+    if any(
+        unicodedata.category(c) in ("Cc", "Cf", "Co") or ord(c) == 0xFFFD
+        for c in name
+    ):
+        return True
+
+    # URLs / emails.
+    if _URL_EMAIL_PATTERN.search(name):
+        return True
+
+    # Reference / citation fragments.
+    if _REFERENCE_PATTERN.search(name):
+        return True
+
+    # Author names like "Smith AB" or "Smith A-B".
+    if _AUTHOR_PATTERN.match(name):
+        return True
+
+    # Header/footer/book metadata words.
+    lower = name.lower()
+    for word in _HEADER_FOOTER_WORDS:
+        if lower == word or lower.startswith(word + " ") or lower.endswith(" " + word):
+            return True
+
+    return False
 
 
 @runtime_checkable
@@ -75,10 +157,16 @@ class SciSpaCyEntityProvider:
         doc = self._nlp(text)
         entities: list[Entity] = []
         seen: set[str] = set()
+        dropped = 0
 
         for ent in doc.ents:
             name = ent.text.strip()
             if not name or len(name) < 2:
+                dropped += 1
+                continue
+
+            if _is_noise_entity(name):
+                dropped += 1
                 continue
 
             key = f"{name.lower()}:{ent.label_}"
@@ -97,6 +185,11 @@ class SciSpaCyEntityProvider:
                 )
             )
 
+        if dropped:
+            logger.debug(
+                "filtered_noise_entities",
+                extra={"source": source_id, "dropped": dropped},
+            )
         return entities
 
     def extract_from_pages(

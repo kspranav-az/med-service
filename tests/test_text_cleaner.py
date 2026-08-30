@@ -49,3 +49,23 @@ def test_cross_page_no_hyphen(cleaner: TextCleaner) -> None:
     page2 = cleaner.clean_page("No issues found.")
     assert page1 == "The patient was stable."
     assert page2 == "No issues found."
+
+
+def test_removes_control_characters(cleaner: TextCleaner) -> None:
+    raw = "Cord\x08\x07 blood sample"
+    assert cleaner.clean(raw) == "Cord blood sample"
+
+
+def test_removes_replacement_characters(cleaner: TextCleaner) -> None:
+    raw = "Activity\ufffd\ufffd\ufffd test"
+    assert cleaner.clean(raw) == "Activity test"
+
+
+def test_removes_private_use_characters(cleaner: TextCleaner) -> None:
+    raw = "Result \uf061 more"
+    assert cleaner.clean(raw) == "Result more"
+
+
+def test_removes_zero_width_and_soft_hyphen(cleaner: TextCleaner) -> None:
+    raw = "word\u200bwith\u00ADhyphen"
+    assert cleaner.clean(raw) == "wordwithhyphen"

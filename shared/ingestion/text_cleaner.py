@@ -3,15 +3,18 @@
 Medical PDFs frequently split words across line breaks with hyphenation,
 e.g. ``Classi-\nfication`` should become ``Classification``. They also
 preserve physical line breaks in the middle of paragraphs, which produces
-entities like ``Köln\nGermany`` and noisy sentence chunking.
+entities like ``Köln\nGermany`` and noisy sentence chunking. Finally,
+PDF extractors emit control characters, private-use glyphs, and Unicode
+replacement characters that must be removed before indexing.
 
-This module normalises both issues while keeping true paragraph breaks
+This module normalises all three issues while keeping true paragraph breaks
 intact.
 """
 
 from __future__ import annotations
 
 import re
+import unicodedata
 
 
 class TextCleaner:
@@ -22,6 +25,7 @@ class TextCleaner:
     - single newlines inside paragraphs converted to spaces
     - paragraph breaks (blank lines) preserved
     - repeated whitespace collapsed
+    - control characters, private-use glyphs, and replacement chars removed
     """
 
     def __init__(self) -> None:
@@ -83,7 +87,42 @@ class TextCleaner:
         # Restore paragraph breaks.
         text = text.replace("\x00PARA\x00", "\n\n")
 
+        # Sanitize PDF artifacts: control chars, private-use glyphs,
+        # replacement characters, zero-width spaces, soft hyphens, BOM.
+        text = self._sanitize(text)
+
         # Collapse repeated whitespace.
         text = re.sub(r"[ \t]+", " ", text)
 
         return text.strip()
+
+    @staticmethod
+    def _sanitize(text: str) -> str:
+        """Remove non-printable PDF artifacts while keeping valid text.
+
+        Removes ASCII control characters (except tab/newline/space),
+        Unicode replacement characters, private-use glyphs, and formatting
+        characters such as zero-width spaces, soft hyphens, and BOM.
+        """
+        cleaned_chars: list[str] = []
+        for char in text:
+            category = unicodedata.category(char)
+            code = ord(char)
+
+            # Keep normal whitespace and visible characters.
+            if char in "\t\n\r ":
+                cleaned_chars.append(char)
+                continue
+
+            # Drop control characters (Cc), format characters (Cf) such as
+            # soft hyphen / zero-width spaces, and private-use glyphs (Co).
+            if category in ("Cc", "Cf", "Co"):
+                continue
+
+            # Drop Unicode replacement character explicitly.
+            if code == 0xFFFD:
+                continue
+
+            cleaned_chars.append(char)
+
+        return "".join(cleaned_chars)
