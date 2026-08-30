@@ -31,7 +31,7 @@ except ImportError:  # pragma: no cover
 DEFAULT_SCISPACY_MODEL = "en_core_sci_md"
 
 # Characters that should not appear at the start or end of a medical term.
-_TRAIL_PUNCT = set(string.punctuation + "–—−―‒‐…“”‘’")
+_TRAIL_PUNCT = set(string.punctuation + "–—−―‒‐…“”‘’•·")
 
 # Patterns used to filter obviously noisy entities extracted from PDFs.
 _AUTHOR_PART_PATTERN = re.compile(
@@ -60,6 +60,9 @@ _POSSESSIVE_BOOK_PATTERN = re.compile(
     re.IGNORECASE,
 )
 _AMPERSAND_PATTERN = re.compile(r"\s+&\s+")
+_NUMBERED_REF_PATTERN = re.compile(r"\.\d+$")
+_SINGLE_WORD_POSSESSIVE_PATTERN = re.compile(r"^[a-zA-Z]+['’]s$")
+_TRAILING_INITIAL_PATTERN = re.compile(r"\s+[A-Z]$")
 _URL_EMAIL_PATTERN = re.compile(r"https?://|www\.|@[\w.-]+\.")
 _REFERENCE_PATTERN = re.compile(r"\b(\d{4};\d+(:\d+)?-\d+|et\s+al|doi:|pmid:|ISBN|ISSN)\b")
 _HEADER_FOOTER_WORDS = {
@@ -173,6 +176,19 @@ def _is_noise_entity(name: str) -> bool:
     if _POSSESSIVE_BOOK_PATTERN.match(name):
         return True
 
+    # Numbered references such as "bladder.6" or "repair.4".
+    if _NUMBERED_REF_PATTERN.search(name):
+        return True
+
+    # Stand-alone possessives like "cancer’s" or "bladder’s".
+    if _SINGLE_WORD_POSSESSIVE_PATTERN.match(name):
+        return True
+
+    # Figure/table labels such as "bladder A".
+    if _TRAILING_INITIAL_PATTERN.search(name):
+        return True
+
+    # Header/footer/book metadata words.
     # Company names / author pairs such as "Smith & Nephew".
     if _AMPERSAND_PATTERN.search(name):
         return True
