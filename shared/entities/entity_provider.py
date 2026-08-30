@@ -9,6 +9,7 @@ protocol.
 from __future__ import annotations
 
 import re
+import string
 import unicodedata
 from collections.abc import Iterable
 from typing import Any, Protocol, runtime_checkable
@@ -29,8 +30,21 @@ except ImportError:  # pragma: no cover
 
 DEFAULT_SCISPACY_MODEL = "en_core_sci_md"
 
+# Characters that should not appear at the start or end of a medical term.
+_TRAIL_PUNCT = set(string.punctuation + "–—−―‒‐…“”‘’")
+
 # Patterns used to filter obviously noisy entities extracted from PDFs.
-_AUTHOR_PATTERN = re.compile(r"^[A-Z][a-zA-Z'-]+ [A-Z]([A-Z]?)(-[A-Z])?$")
+_AUTHOR_PART_PATTERN = re.compile(
+    # Surname: capitalised word, optionally preceded by de/van/von. Apostrophes
+    # are allowed; hyphens are not, so medical fragments like "X-ray" are not
+    # mistaken for surnames.
+    r"^(?:(?:[Dd]e|[Vv]an|[Vv]on)\s+)?[A-Z][a-zA-Z']+"
+    # Optional initials, e.g. "AB", "A-B".
+    r"(?:\s+[A-Z](?:[A-Z]?|-[A-Z]))?"
+    # Optional "Jr" suffix.
+    r"(?:\s+Jr\.?)?$"
+)
+_AUTHOR_COMMA_PATTERN = re.compile(r",\s*[A-Z]")
 _URL_EMAIL_PATTERN = re.compile(r"https?://|www\.|@[\w.-]+\.")
 _REFERENCE_PATTERN = re.compile(r"\b(\d{4};\d+(:\d+)?-\d+|et\s+al|doi:|pmid:|ISBN|ISSN)\b")
 _HEADER_FOOTER_WORDS = {
@@ -57,6 +71,25 @@ _HEADER_FOOTER_WORDS = {
     "volume",
     "part",
 }
+_HEADER_FOOTER_RE = re.compile(
+    r"\b(?:" + "|".join(re.escape(word) for word in _HEADER_FOOTER_WORDS) + r")\b"
+)
+
+
+def _looks_like_author(name: str) -> bool:
+    """Return True if ``name`` looks like an author or author list."""
+    # Comma followed by an initial is a strong author signal, e.g. "Smith, AB"
+    # or "Wallner SJ, Reusche E".
+    if _AUTHOR_COMMA_PATTERN.search(name):
+        return True
+
+    parts = re.split(r"\s*,\s*|\s+\band\b\s+", name)
+    if len(parts) > 1 and all(
+        _AUTHOR_PART_PATTERN.match(part.strip()) for part in parts if part.strip()
+    ):
+        return True
+
+    return bool(_AUTHOR_PART_PATTERN.match(name))
 
 
 def _label_to_tui(label: str) -> str:
@@ -102,15 +135,19 @@ def _is_noise_entity(name: str) -> bool:
     if _REFERENCE_PATTERN.search(name):
         return True
 
-    # Author names like "Smith AB" or "Smith A-B".
-    if _AUTHOR_PATTERN.match(name):
+    # Leading or trailing punctuation/dashes are usually fragments, e.g.
+    # "cord–", "’s site", "sphincter ani”", "P.O.".
+    if name[0] in _TRAIL_PUNCT or name[-1] in _TRAIL_PUNCT:
+        return True
+
+    # Author names like "Smith AB", "Smith, AB", "de Vries PA",
+    # "Templeton JH Jr", or "Wallner SJ, Reusche E".
+    if _looks_like_author(name):
         return True
 
     # Header/footer/book metadata words.
-    lower = name.lower()
-    for word in _HEADER_FOOTER_WORDS:
-        if lower == word or lower.startswith(word + " ") or lower.endswith(" " + word):
-            return True
+    if _HEADER_FOOTER_RE.search(name.lower()):
+        return True
 
     return False
 
