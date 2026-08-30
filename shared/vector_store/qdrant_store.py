@@ -62,6 +62,7 @@ class QdrantVectorStore:
             url=settings.qdrant_url,
             api_key=settings.qdrant_api_key,
             check_compatibility=False,
+            timeout=120,
         )
 
     def ensure_collection(self, dimension: int = 768) -> None:
@@ -121,7 +122,7 @@ class QdrantVectorStore:
         chunks: list[Chunk],
         embeddings: NDArray[Any],
         version: int = 1,
-        upsert_batch_size: int = 500,
+        upsert_batch_size: int = 250,
         wait: bool = True,
     ) -> None:
         """Insert or update chunks in the collection.
